@@ -12,6 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
 
 ## Добавление зависимостей
+include(deps/spdlog/CMakeLists.txt)
 include(deps/simpleini/CMakeLists.txt)
 include(deps/httplib/CMakeLists.txt)
 include(deps/nlohmann/CMakeLists.txt)
@@ -34,6 +35,7 @@ target_include_directories(tg-mail-notifier PRIVATE
 )
 
 ## Добавление доп. библиотек
+target_link_libraries(tg-mail-notifier spdlog::spdlog)
 target_link_libraries(tg-mail-notifier httplib)
 target_link_libraries(tg-mail-notifier nlohmann_json::nlohmann_json)
 target_link_libraries(tg-mail-notifier CURL::libcurl)
