@@ -1,0 +1,4 @@
+*.user
+build/
+bin/
+.tg_token
