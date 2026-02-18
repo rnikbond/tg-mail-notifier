@@ -5,13 +5,21 @@
 #include <string>
 //----------------------------------------------------------
 
-/*!
- * \brief Класс для разбора ini файла и аргументов командной строки
+/**
+ * @brief Класс для разбора ini файла и аргументов командной строки
+ * 
+ * Данный класс реализован через паттер Singleton
  */
 class Config {
+
+    Config() = default;
+
 public:
 
-    Config();
+    static Config &get_instance();
+
+public:
+
     void parse(int argc, char **argv, const std::string &path);
     void setup_logger();
 

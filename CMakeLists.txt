@@ -12,23 +12,38 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
 
 ## Добавление зависимостей
-include(deps/spdlog/CMakeLists.txt)
-include(deps/cli11/CMakeLists.txt)
-include(deps/httplib/CMakeLists.txt)
-include(deps/nlohmann/CMakeLists.txt)
-include(deps/curl/CMakeLists.txt)
-include(deps/gmime/CMakeLists.txt)
-include(deps/sqlite/CMakeLists.txt)
+include(third_party/spdlog/CMakeLists.txt)
+include(third_party/cli11/CMakeLists.txt)
+include(third_party/httplib/CMakeLists.txt)
+include(third_party/nlohmann/CMakeLists.txt)
+include(third_party/curl/CMakeLists.txt)
+include(third_party/gmime/CMakeLists.txt)
+include(third_party/sqlite/CMakeLists.txt)
+
+## Перечисление путей для include
+include_directories(
+    ${PROJECT_SOURCE_DIR}/include
+)
+
+## Перечисление заголовочных файлов
+set(INCLUDES
+    include/storage/IStorage.h
+    include/repository/IRepository.h
+)
 
 ## Перечисление исходников
 set(SOURCES
     src/main.cpp
+    src/core/Config.h src/core/Config.cpp
+    src/cache/Cache.h src/cache/Cache.cpp
 )
 
 ## Добавление исходников к проекту
 add_executable(tg-mail-notifier
+    ${INCLUDES}
     ${SOURCES}
-    src/core/Config.h src/core/Config.cpp)
+    include/chat/Chat.h
+)
 
 ## Добавление доп. библиотек
 target_link_libraries(tg-mail-notifier spdlog::spdlog)

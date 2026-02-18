@@ -8,7 +8,7 @@ namespace logger = spdlog;
 
 int main(int argc, char **argv) {
 
-    Config cfg;
+    Config &cfg = Config::get_instance();
     cfg.parse(argc, argv, "tg-mail-notifier.ini");
     cfg.setup_logger();
 
