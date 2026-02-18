@@ -13,7 +13,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
 
 ## Добавление зависимостей
 include(deps/spdlog/CMakeLists.txt)
-include(deps/simpleini/CMakeLists.txt)
+include(deps/cli11/CMakeLists.txt)
 include(deps/httplib/CMakeLists.txt)
 include(deps/nlohmann/CMakeLists.txt)
 include(deps/curl/CMakeLists.txt)
@@ -27,15 +27,12 @@ set(SOURCES
 
 ## Добавление исходников к проекту
 add_executable(tg-mail-notifier
-    ${SOURCES})
-
-## Перечисление путей для include
-target_include_directories(tg-mail-notifier PRIVATE
-    ${simpleini_SOURCE_DIR}
-)
+    ${SOURCES}
+    src/core/Config.h src/core/Config.cpp)
 
 ## Добавление доп. библиотек
 target_link_libraries(tg-mail-notifier spdlog::spdlog)
+target_link_libraries(tg-mail-notifier CLI11::CLI11)
 target_link_libraries(tg-mail-notifier httplib)
 target_link_libraries(tg-mail-notifier nlohmann_json::nlohmann_json)
 target_link_libraries(tg-mail-notifier CURL::libcurl)

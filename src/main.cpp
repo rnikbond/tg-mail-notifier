@@ -1,8 +1,12 @@
-#include <iostream>
+//----------------------------------------------------------
+#include "core/Config.h"
+//----------------------------------------------------------
 
-using namespace std;
+int main(int argc, char **argv) {
 
-int main() {
-    cout << "Hello World!" << endl;
+    Config cfg;
+    cfg.parse(argc, argv, "tg-mail-notifier.ini");
+
     return 0;
 }
+//----------------------------------------------------------------------------------------------------------------------
