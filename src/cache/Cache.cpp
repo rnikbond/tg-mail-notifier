@@ -1,5 +1,9 @@
 //----------------------------------------------------------
+#include <spdlog/spdlog.h>
+//----------------------------------------------------------
 #include "Cache.h"
+//----------------------------------------------------------
+namespace logger = spdlog;
 //----------------------------------------------------------
 
 /*!
@@ -11,22 +15,97 @@ Cache::Cache(std::unique_ptr<IStorage> storage)
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-ChatPtr Cache::create(const Chat& chat) noexcept {
-    return std::nullopt;
+ChatOpt Cache::create(const Chat& chat) noexcept {
+
+    std::unique_lock lock(m_mutex);
+
+    try {
+        m_storage->create(chat);
+    } catch (const std::exception& ex) {
+        logger::error("[Cache::create] failed create in storage: {}. chat_id = {}", ex.what(), chat.chat_id);
+        return std::nullopt;
+    }
+
+    if (!m_data.contains(chat.chat_id)) {
+        auto chat_shared     = std::make_shared<Chat>(chat);
+        m_data[chat.chat_id] = chat_shared;
+        return chat_shared;
+    }
+
+    return m_data.at(chat.chat_id);
 }
 //----------------------------------------------------------------------------------------------------------------------
 
 bool Cache::update(const Chat& chat) noexcept {
-    return false;
+
+    std::unique_lock lock(m_mutex);
+
+    try {
+        m_storage->udpate(chat);
+    } catch (const std::exception& ex) {
+        logger::error("[Cache::update] failed update in storage: {}. chat id = {}", ex.what(), chat.chat_id);
+        return false;
+    }
+
+    m_data[chat.chat_id] = std::make_shared<Chat>(chat);
+    return true;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-ChatPtr Cache::find(int64_t chat_id) noexcept {
-    return std::nullopt;
+ChatsOpt Cache::find(const std::set<int64_t>& chat_ids) noexcept {
+
+    std::set<std::shared_ptr<const Chat>> chats;
+    std::set<int64_t>                     load_chats_ids;
+
+    {
+        std::shared_lock lock(m_mutex);
+
+        for (int64_t chat_id : chat_ids) {
+            if (m_data.contains(chat_id)) {
+                chats.insert(m_data.at(chat_id));
+            } else {
+                load_chats_ids.insert(chat_id);
+            }
+        }
+    }
+
+    if (load_chats_ids.size() != 0) {
+
+        std::unique_lock lock(m_mutex);
+
+        auto res = m_storage->find(load_chats_ids);
+        if (res.has_value()) {
+            auto chats_storage = res.value();
+            for (const Chat& chat : chats_storage) {
+                auto chat_shared     = std::make_shared<Chat>(chat);
+                m_data[chat.chat_id] = chat_shared;
+                chats.insert(chat_shared);
+            }
+        } else {
+            logger::error("[Cache::find] not found chats in storage: {}", fmt::join(load_chats_ids, ","));
+        }
+    }
+
+    return chats;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
 std::unordered_map<int64_t, Email> Cache::chats() noexcept {
-    return {};
+
+    auto chats_ids = m_storage->chat_ids();
+    auto res       = find(chats_ids);
+    if (!res.has_value()) {
+        logger::error("[Cache::chats] not found chats in: {}", fmt::join(chats_ids, ","));
+        return {};
+    }
+
+    std::unordered_map<int64_t, Email> chats_email;
+
+    auto chats_map = res.value();
+    for (const auto& chat : chats_map) {
+        chats_email[chat->chat_id] = chat->email;
+    }
+
+    return chats_email;
 }
 //----------------------------------------------------------------------------------------------------------------------

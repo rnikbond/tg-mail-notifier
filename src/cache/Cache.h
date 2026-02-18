@@ -3,6 +3,7 @@
 #define CACHE_H
 //----------------------------------------------------------
 #include <memory>
+#include <shared_mutex>
 //----------------------------------------------------------
 #include "repository/IRepository.h"
 #include "storage/IStorage.h"
@@ -22,14 +23,17 @@ public:
 
 public:
 
-    [[nodiscard]] virtual ChatPtr create(const Chat& chat) noexcept override;
+    [[nodiscard]] virtual ChatOpt create(const Chat& chat) noexcept override;
     [[nodiscard]] virtual bool update(const Chat& chat) noexcept override;
-    [[nodiscard]] virtual ChatPtr find(int64_t chat_id) noexcept override;
+    [[nodiscard]] virtual ChatsOpt find(const std::set<int64_t>& chat_ids) noexcept override;
     [[nodiscard]] virtual std::unordered_map<int64_t, Email> chats() noexcept override;
 
 private:
 
+    std::shared_mutex m_mutex;
+
     std::unique_ptr<IStorage> m_storage;
+    std::unordered_map<int64_t, std::shared_ptr<Chat>> m_data;
 };
 //----------------------------------------------------------------------------------------------------------------------
 

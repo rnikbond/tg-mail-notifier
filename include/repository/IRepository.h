@@ -7,7 +7,8 @@
 //----------------------------------------------------------
 #include "chat/Chat.h"
 //----------------------------------------------------------
-using ChatPtr = std::optional<std::shared_ptr<const Chat>>;
+using ChatOpt  = std::optional<std::shared_ptr<const Chat>>;
+using ChatsOpt = std::optional<std::set<std::shared_ptr<const Chat>>>;
 //----------------------------------------------------------
 
 /**
@@ -29,7 +30,7 @@ public:
      * @param chat Данные нового чата
      * @return Указатель на созданный чат или nullopt, если пошло что-то не так
      */
-    [[nodiscard]] virtual ChatPtr create(const Chat& chat) noexcept = 0;
+    [[nodiscard]] virtual ChatOpt create(const Chat& chat) noexcept = 0;
 
     /**
      * @brief Обновление информации о чате
@@ -40,10 +41,10 @@ public:
 
     /**
      * @brief Поиск чата
-     * @param chat_id Идентификатор чата
+     * @param chat_ids Идентификаторы чатов
      * @return Указатель на чат или nullopt, если он не найден
      */
-    [[nodiscard]] virtual ChatPtr find(int64_t chat_id) noexcept = 0;
+    [[nodiscard]] virtual ChatsOpt find(const std::set<int64_t>& chat_ids) noexcept = 0;
 
     /**
      * @brief Получение карты чатов и email

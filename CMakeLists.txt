@@ -29,20 +29,25 @@ include_directories(
 set(INCLUDES
     include/storage/IStorage.h
     include/repository/IRepository.h
+
+    include/chat/Chat.h
 )
 
 ## Перечисление исходников
 set(SOURCES
     src/main.cpp
+    src/core/Config.h src/core/Config.h
     src/core/Config.h src/core/Config.cpp
+    src/cache/Cache.h src/cache/Cache.h
     src/cache/Cache.h src/cache/Cache.cpp
+    src/storage/memory/MemoryStorage.h
+    src/storage/memory/MemoryStorage.cpp
 )
 
 ## Добавление исходников к проекту
 add_executable(tg-mail-notifier
     ${INCLUDES}
     ${SOURCES}
-    include/chat/Chat.h
 )
 
 ## Добавление доп. библиотек
