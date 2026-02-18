@@ -2,6 +2,9 @@
 #include <filesystem>
 //----------------------------------------------------------
 #include <CLI/CLI.hpp>
+#include <spdlog/sinks/rotating_file_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
 //----------------------------------------------------------
 #include "Config.h"
 //----------------------------------------------------------
@@ -45,6 +48,48 @@ void Config::parse(int argc, char **argv, const std::string &path) {
         std::ofstream out(path);
         out << app.config_to_str(true, true);
         out.close();
+    }
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/*!
+ * \brief Настройка логера
+ * 
+ * Логирование происходит на консоль и в файл.
+ * На консоль выводится с уровнем trace.
+ * В файл выводится с уровнем, указанным в \a m_log_level.
+ */
+void Config::setup_logger() {
+
+    try {
+        //: Создание папки для логов, если её нет
+        std::filesystem::path log_file(m_log_path);
+        if (log_file.has_parent_path()) {
+            std::filesystem::create_directories(log_file.parent_path());
+        }
+
+        //: Настраиваем "раковины" (sinks)
+        auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+        console_sink->set_level(spdlog::level::trace);
+        console_sink->set_pattern("%^[%Y-%m-%d %H:%M:%S] [%l]%$ %v");
+
+        //: Файловый логгер: макс 5МБ, храним 3 старых файла
+        auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(m_log_path, 1024 * 1024 * 5, 3);
+        file_sink->set_level(spdlog::level::from_str(m_log_level));
+
+        //: Собираем логгер из двух sink‑ов
+        std::vector<spdlog::sink_ptr> sinks{console_sink, file_sink};
+
+        //: Глобальная настройка логера
+        auto logger = std::make_shared<spdlog::logger>("multi_logger", sinks.begin(), sinks.end());
+        logger->set_level(spdlog::level::debug);
+
+        spdlog::set_default_logger(logger);
+        spdlog::set_level(spdlog::level::trace);
+
+    } catch (const spdlog::spdlog_ex &e) {
+        std::cerr << "log initialization failed: " << e.what() << std::endl;
+        std::exit(1);
     }
 }
 //----------------------------------------------------------------------------------------------------------------------

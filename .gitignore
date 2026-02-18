@@ -1,4 +1,7 @@
-*.user
 build/
 bin/
-.tg_token
+
+*.user
+*.tg_token
+*.ini
+*.log

@@ -1,11 +1,18 @@
 //----------------------------------------------------------
+#include <spdlog/spdlog.h>
+//----------------------------------------------------------
 #include "core/Config.h"
+//----------------------------------------------------------
+void setup_log();
 //----------------------------------------------------------
 
 int main(int argc, char **argv) {
 
     Config cfg;
     cfg.parse(argc, argv, "tg-mail-notifier.ini");
+    cfg.setup_logger();
+
+    spdlog::info("start");
 
     return 0;
 }

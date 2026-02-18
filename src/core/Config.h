@@ -13,6 +13,7 @@ public:
 
     Config();
     void parse(int argc, char **argv, const std::string &path);
+    void setup_logger();
 
 public:
 
