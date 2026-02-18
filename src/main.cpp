@@ -3,7 +3,7 @@
 //----------------------------------------------------------
 #include "core/Config.h"
 //----------------------------------------------------------
-void setup_log();
+namespace logger = spdlog;
 //----------------------------------------------------------
 
 int main(int argc, char **argv) {
@@ -12,7 +12,7 @@ int main(int argc, char **argv) {
     cfg.parse(argc, argv, "tg-mail-notifier.ini");
     cfg.setup_logger();
 
-    spdlog::info("start");
+    logger::info("start");
 
     return 0;
 }
