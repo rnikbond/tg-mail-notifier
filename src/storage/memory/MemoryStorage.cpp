@@ -39,8 +39,6 @@ std::optional<std::vector<Chat>> MemoryStorage::find(const std::vector<int64_t>&
     for (int64_t chat_id : chat_ids) {
         if (m_data.contains(chat_id)) {
             chats.push_back(m_data.at(chat_id));
-        } else {
-            logger::error("[ MemoryStorage::find] not found chat id: {}", chat_id);
         }
     }
 
