@@ -64,7 +64,7 @@ struct Email
  */
 struct Chat
 {
-    int64_t      chat_id;         ///< Идетнификатор чата из telegram
+    int64_t      chat_id = {};    ///< Идетнификатор чата из telegram
     std::string  username;        ///: Логин из telegram
     std::string  first_name;      ///: Имя пользователя из telegram
     std::string  last_name;       ///: Фамилия пользователя из telegram

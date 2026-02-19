@@ -29,17 +29,16 @@ include_directories(
 set(INCLUDES
     include/storage/IStorage.h
     include/repository/IRepository.h
-
     include/chat/Chat.h
 )
 
 ## Перечисление исходников
 set(SOURCES
     src/main.cpp
-    src/core/Config.h src/core/Config.h
-    src/core/Config.h src/core/Config.cpp
-    src/cache/Cache.h src/cache/Cache.h
-    src/cache/Cache.h src/cache/Cache.cpp
+    src/core/Config.h
+    src/core/Config.cpp
+    src/cache/Cache.h
+    src/cache/Cache.cpp
     src/storage/memory/MemoryStorage.h
     src/storage/memory/MemoryStorage.cpp
 )
@@ -58,3 +57,5 @@ target_link_libraries(tg-mail-notifier nlohmann_json::nlohmann_json)
 target_link_libraries(tg-mail-notifier CURL::libcurl)
 target_link_libraries(tg-mail-notifier ${GMIME_LIBRARIES})
 target_link_libraries(tg-mail-notifier SQLite::SQLite3)
+
+add_subdirectory(tests)

@@ -17,6 +17,11 @@ Cache::Cache(std::unique_ptr<IStorage> storage)
 
 ChatOpt Cache::create(const Chat& chat) noexcept {
 
+    if (chat.chat_id == 0 || chat.username.empty()) {
+        logger::error("[Cache::create] chat not have id or username. chat_id = {}, username = {}", chat.chat_id, chat.username);
+        return std::nullopt;
+    }
+
     std::unique_lock lock(m_mutex);
 
     try {
@@ -37,6 +42,11 @@ ChatOpt Cache::create(const Chat& chat) noexcept {
 //----------------------------------------------------------------------------------------------------------------------
 
 bool Cache::update(const Chat& chat) noexcept {
+
+    if (chat.chat_id == 0 || chat.username.empty()) {
+        logger::error("[Cache::update] chat not have id or username. chat_id = {}, username = {}", chat.chat_id, chat.username);
+        return false;
+    }
 
     std::unique_lock lock(m_mutex);
 
