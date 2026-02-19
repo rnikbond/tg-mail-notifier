@@ -272,12 +272,11 @@ TEST(Test_Cache, CheckFind_MultiChatID_Positive) {
     auto  memory = std::make_unique<MemoryStorage>();
     Cache cache(std::move(memory));
 
-    std::set<int64_t> ids;
+    std::vector<int64_t> ids;
     for (const Chat& chat : chats) {
         auto res = cache.create(chat);
         ASSERT_TRUE(res.has_value());
-
-        ids.insert(chat.chat_id);
+        ids.push_back(chat.chat_id);
     }
 
     auto res_find = cache.find(ids);
@@ -287,7 +286,10 @@ TEST(Test_Cache, CheckFind_MultiChatID_Positive) {
     ASSERT_EQ(chats_find.size(), chats.size());
 
     for (auto it = chats_find.begin(); it != chats_find.end(); ++it) {
-        ids.erase((*it)->chat_id);
+        auto it_v = std::find(ids.begin(), ids.end(), (*it)->chat_id);
+        if (it_v != ids.end()) {
+            ids.erase(it_v);
+        }
     }
 
     EXPECT_EQ(ids.size(), 0);

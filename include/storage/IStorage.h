@@ -34,13 +34,13 @@ public:
      * @param chat_ids Список идентификаторов чатов
      * @return Данные чата, если он найден
      */
-    [[nodiscard]] virtual std::optional<std::vector<Chat>> find(const std::set<int64_t>& chat_ids) const noexcept = 0;
+    [[nodiscard]] virtual std::optional<std::vector<Chat>> find(const std::vector<int64_t>& chat_ids) const noexcept = 0;
 
     /**
      * @brief Получение идетнификторов всех чатов
      * @return Список идентификаторов чатов
      */
-    [[nodiscard]] virtual std::set<int64_t> chat_ids() const noexcept = 0;
+    [[nodiscard]] virtual std::vector<int64_t> chat_ids() const noexcept = 0;
 };
 //----------------------------------------------------------------------------------------------------------------------
 

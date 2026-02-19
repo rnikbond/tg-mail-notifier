@@ -8,7 +8,7 @@
 #include "chat/Chat.h"
 //----------------------------------------------------------
 using ChatOpt  = std::optional<std::shared_ptr<const Chat>>;
-using ChatsOpt = std::optional<std::set<std::shared_ptr<const Chat>>>;
+using ChatsOpt = std::optional<std::vector<std::shared_ptr<const Chat>>>;
 //----------------------------------------------------------
 
 /**
@@ -44,7 +44,7 @@ public:
      * @param chat_ids Идентификаторы чатов
      * @return Указатель на чат или nullopt, если он не найден
      */
-    [[nodiscard]] virtual ChatsOpt find(const std::set<int64_t>& chat_ids) noexcept = 0;
+    [[nodiscard]] virtual ChatsOpt find(const std::vector<int64_t>& chat_ids) noexcept = 0;
 
     /**
      * @brief Получение карты чатов и email

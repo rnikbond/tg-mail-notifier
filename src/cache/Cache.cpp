@@ -62,19 +62,19 @@ bool Cache::update(const Chat& chat) noexcept {
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-ChatsOpt Cache::find(const std::set<int64_t>& chat_ids) noexcept {
+ChatsOpt Cache::find(const std::vector<int64_t>& chat_ids) noexcept {
 
-    std::set<std::shared_ptr<const Chat>> chats;
-    std::set<int64_t>                     load_chats_ids;
+    std::vector<std::shared_ptr<const Chat>> chats;
+    std::vector<int64_t>                     load_chats_ids;
 
     {
         std::shared_lock lock(m_mutex);
 
         for (int64_t chat_id : chat_ids) {
             if (m_data.contains(chat_id)) {
-                chats.insert(m_data.at(chat_id));
+                chats.push_back(m_data.at(chat_id));
             } else {
-                load_chats_ids.insert(chat_id);
+                load_chats_ids.push_back(chat_id);
             }
         }
     }
@@ -89,7 +89,7 @@ ChatsOpt Cache::find(const std::set<int64_t>& chat_ids) noexcept {
             for (const Chat& chat : chats_storage) {
                 auto chat_shared     = std::make_shared<Chat>(chat);
                 m_data[chat.chat_id] = chat_shared;
-                chats.insert(chat_shared);
+                chats.push_back(chat_shared);
             }
         } else {
             logger::error("[Cache::find] not found chats in storage: {}", fmt::join(load_chats_ids, ","));

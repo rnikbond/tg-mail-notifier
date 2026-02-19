@@ -1,7 +1,11 @@
 //----------------------------------------------------------
 #include <ranges>
 //----------------------------------------------------------
+#include <spdlog/spdlog.h>
+//----------------------------------------------------------
 #include "MemoryStorage.h"
+//----------------------------------------------------------
+namespace logger = spdlog;
 //----------------------------------------------------------
 
 MemoryStorage::MemoryStorage() {
@@ -28,13 +32,15 @@ void MemoryStorage::udpate(const Chat& chat) {
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-std::optional<std::vector<Chat>> MemoryStorage::find(const std::set<int64_t>& chat_ids) const noexcept {
+std::optional<std::vector<Chat>> MemoryStorage::find(const std::vector<int64_t>& chat_ids) const noexcept {
 
     std::vector<Chat> chats;
 
     for (int64_t chat_id : chat_ids) {
         if (m_data.contains(chat_id)) {
             chats.push_back(m_data.at(chat_id));
+        } else {
+            logger::error("[ MemoryStorage::find] not found chat id: {}", chat_id);
         }
     }
 
@@ -42,12 +48,12 @@ std::optional<std::vector<Chat>> MemoryStorage::find(const std::set<int64_t>& ch
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-std::set<int64_t> MemoryStorage::chat_ids() const noexcept {
+std::vector<int64_t> MemoryStorage::chat_ids() const noexcept {
 
-    std::set<int64_t> ids;
+    std::vector<int64_t> ids;
 
     for (int64_t chat_id : m_data | std::views::keys) {
-        ids.insert(chat_id);
+        ids.push_back(chat_id);
     }
 
     return {};
