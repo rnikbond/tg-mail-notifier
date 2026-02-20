@@ -1,4 +1,6 @@
 //----------------------------------------------------------
+#include <regex>
+//----------------------------------------------------------
 #include "nlohmann/json.hpp"
 #include <spdlog/spdlog.h>
 //----------------------------------------------------------
@@ -6,6 +8,50 @@
 //----------------------------------------------------------
 namespace logger = spdlog;
 //----------------------------------------------------------
+
+namespace {
+
+/**
+ * @brief  Поддерживаемые команды
+ */
+enum Commands {
+    None,     ///< Отсутствие занчения
+    Start,    ///< Команда "/start"
+    About,    ///< Команда "/about"
+    Status,   ///< Команда "/status"
+    Email,    ///< Команда "/email"
+    Password, ///< Команда "/password"
+};
+//----------------------------------------------------------------------------------------------------------------------
+
+const std::unordered_map<std::string, Commands> g_commands_map = {
+    {"/start", Commands::Start},
+    {"/about", Commands::About},
+    {"/status", Commands::Status},
+    {"/email", Commands::Email},
+    {"/password", Commands::Password},
+};
+//----------------------------------------------------------------------------------------------------------------------
+
+/*!
+ * @brief Поиск текстового значения команды
+ * @param cmd Идентификатор команды
+ * @return Текстовое занчение команды
+ */
+std::string find_command_text(Commands cmd) {
+    std::string text;
+    for (auto& [cmd_text, cmd_id] : g_commands_map) {
+        if (cmd_id == cmd) {
+            text = cmd_text;
+            break;
+        }
+    }
+    return text;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+} // namespace
+//----------------------------------------------------------------------------------------------------------------------
 
 TelegramController::TelegramController(const std::string& token, std::shared_ptr<IRepository> repo)
     : m_repo(repo)
@@ -27,12 +73,12 @@ TelegramController::TelegramController(const std::string& token, std::shared_ptr
  * @param[out] last_msg_id Идентификатор последнего прочитанного сообщения
  * @return Данные для отправки запроса в telegram, или nullopt, если это сообщение проигнорировано
  */
-std::optional<TelegramRequest> TelegramController::process(const TelegramResponse&& response, int64_t& last_msg_id) {
+RequestOpt TelegramController::process(const TelegramResponse&& response, int64_t& last_msg_id) {
 
     json body_js = json::parse(response.body);
 
     if (!body_js.contains("result")) {
-        throw std::runtime_error("[TelegramController] invalid JSON: does not contains 'result'");
+        throw std::runtime_error("[TelegramController::process] invalid JSON: does not contains 'result'");
     }
 
     //: Обрабатывае только последнее сообщение
@@ -42,7 +88,7 @@ std::optional<TelegramRequest> TelegramController::process(const TelegramRespons
     }
 
     if (!body_js["result"][idx].contains("update_id")) {
-        throw std::runtime_error("[TelegramController] invalid JSON: does not contains 'update_id' in [result][i]");
+        throw std::runtime_error("[TelegramController::process] invalid JSON: does not contains 'update_id' in [result][i]");
     }
 
     int64_t update_id = body_js["result"][idx]["update_id"];
@@ -52,6 +98,10 @@ std::optional<TelegramRequest> TelegramController::process(const TelegramRespons
     }
 
     //: Запоминаем идентификатор обработанного сообщения
+    if (last_msg_id == 0) {
+        last_msg_id = update_id;
+        return std::nullopt;
+    }
     last_msg_id = update_id;
 
     int64_t chat_id;
@@ -64,7 +114,7 @@ std::optional<TelegramRequest> TelegramController::process(const TelegramRespons
         chat_id = find_chat_id(body_js, idx, "edited_message");
     } else {
         //: непонятно, как обрабатывать
-        logger::warn(std::format("[TelegramController] unknown JSON: \n{}", body_js.dump(4)));
+        logger::warn("[TelegramController::process] unknown JSON: \n{}", body_js.dump(4));
         return std::nullopt;
     }
 
@@ -85,19 +135,11 @@ std::optional<TelegramRequest> TelegramController::process(const TelegramRespons
         }
     }
 
-    constexpr std::string_view url = "/bot{}/sendMessage";
-
-    json req_body;
-    req_body["chat_id"]    = chat->chat_id;
-    req_body["text"]       = "Привет";
-    req_body["parse_mode"] = "HTML";
-
-    TelegramRequest request;
-    request.url          = std::format(url, m_token);
-    request.body         = req_body.dump();
-    request.content_type = "application/json";
-
-    return request;
+    if (body_js["result"][idx]["message"].contains("reply_to_message")) {
+        return handle_reply_on_cmd(body_js, idx, chat);
+    } else {
+        return handle_cmd(body_js, idx, chat);
+    }
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -110,10 +152,10 @@ std::optional<TelegramRequest> TelegramController::process(const TelegramRespons
  */
 int64_t TelegramController::find_chat_id(const json& body_js, int idx, const std::string_view tag) {
     if (!body_js["result"][idx][tag].contains("chat")) {
-        throw std::runtime_error("[TelegramController] invalid JSON: does not contains 'chat' in [result][i][edited_message]");
+        throw std::runtime_error("[TelegramController::find_chat_id] invalid JSON: does not contains 'chat' in [result][i][edited_message]");
     }
     if (!body_js["result"][idx][tag]["chat"].contains("id")) {
-        throw std::runtime_error("[TelegramController] invalid JSON: does not contains 'id' in [result][i][edited_message][chat]");
+        throw std::runtime_error("[TelegramController::find_chat_id] invalid JSON: does not contains 'id' in [result][i][edited_message][chat]");
     }
 
     return body_js["result"][idx][tag]["chat"]["id"];
@@ -130,7 +172,7 @@ int64_t TelegramController::find_chat_id(const json& body_js, int idx, const std
 std::shared_ptr<const Chat> TelegramController::register_chat(int64_t chat_id, int idx, const json& body_js) {
 
     if (!body_js["result"][idx]["message"]["chat"].contains("username")) {
-        throw std::runtime_error("[TelegramController] invalid JSON: does not contains 'username' in [result][i][message][chat]");
+        throw std::runtime_error("[TelegramController::register_chat] invalid JSON: does not contains 'username' in [result][i][message][chat]");
     }
 
     Chat chat;
@@ -148,9 +190,290 @@ std::shared_ptr<const Chat> TelegramController::register_chat(int64_t chat_id, i
 
     auto res = m_repo->create(chat);
     if (!res.has_value()) {
-        throw std::runtime_error("failed create chat in repository");
+        throw std::runtime_error("[TelegramController::register_chat] failed create chat in repository");
     }
 
     return res.value();
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Обработка ответа на сообщение
+ * @param body_js Данные в виде JSON объекта
+ * @param idx     Индекс сообщения из массива JSON: ["result"]
+ * @param chat    Указатель на чат
+ * @return Данные для отправки в telegram или nullopt
+ * 
+ * Изменение данных реализовано через ответ на сообщение
+ */
+RequestOpt TelegramController::handle_reply_on_cmd(const json& body_js, int idx, std::shared_ptr<const Chat> chat) {
+
+    if (!body_js["result"][idx]["message"]["reply_to_message"].contains("text")) {
+        throw std::runtime_error("[TelegramController::handle_reply_on_cmd] invalid JSON: does not contains 'text' in [result][i][message][reply_to_message]");
+    }
+
+    if (!body_js["result"][idx]["message"].contains("text")) {
+        throw std::runtime_error("[TelegramController::handle_reply_on_cmd] invalid JSON: does not contains 'text' in [result][i][message]");
+    }
+
+    std::string reply_text = body_js["result"][idx]["message"]["reply_to_message"]["text"];
+
+    size_t pos = reply_text.find('\n');
+    if (pos == std::string::npos) {
+        throw std::runtime_error(std::format("[TelegramController::handle_reply_on_cmd] invalid reply: {}", reply_text));
+    }
+
+    std::string command_text = reply_text.substr(0, pos);
+    if (!g_commands_map.contains(command_text)) {
+        throw std::runtime_error(std::format("[TelegramController::handle_reply_on_cmd] unknown command: {}", command_text));
+    }
+
+    Commands cmd = g_commands_map.at(command_text);
+    switch (cmd) {
+        case Commands::Email:
+            return process_cmd_value_email(body_js, idx, chat);
+        case Commands::Password:
+            return process_cmd_value_password(body_js, idx, chat);
+        default:
+            throw std::runtime_error(std::format("[TelegramController::handle_cmd] no case for command: {}", command_text));
+    }
+
+    return std::nullopt;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Обработка команды из telegram
+ * @param body_js Данные в виде JSON объекта
+ * @param idx     Индекс сообщения из массива JSON: ["result"]
+ * @param chat    Указатель на чат
+ * @return Данные для отправки в telegram или nullopt
+ */
+RequestOpt TelegramController::handle_cmd(const json& body_js, int idx, std::shared_ptr<const Chat> chat) {
+
+    if (!body_js["result"][idx]["message"].contains("text")) {
+        throw std::runtime_error("[TelegramController::handle_cmd] invalid JSON: does not contains 'text' in [result][i][message]");
+    }
+
+    std::string command_text = body_js["result"][idx]["message"]["text"];
+    if (!g_commands_map.contains(command_text)) {
+        if (command_text.length() > 1 && command_text[0] == '/') {
+            return prepare_request_text(chat, "Такого я ещё не умею ☹️");
+        } else {
+            return prepare_request_text(chat, "Это не похоже на команду 😞");
+        }
+    }
+
+    Commands cmd = g_commands_map.at(command_text);
+    switch (cmd) {
+        case Commands::Start:
+        case Commands::About:
+            return prepare_request_about(chat);
+        case Commands::Status:
+            return prepare_request_status(chat);
+        case Commands::Email:
+            return prepare_request_email(chat);
+        case Commands::Password:
+            return prepare_request_password(chat);
+        default:
+            logger::error("[TelegramController::handle_cmd] no case for command: {}", command_text);
+            throw std::runtime_error(std::format("[TelegramController::handle_cmd] no case command: {}", command_text));
+    }
+
+    return std::nullopt;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Обработка ответа на команду "/email"
+ * @param body_js Данные в виде JSON объекта
+ * @param idx     Индекс сообщения из массива JSON: ["result"]
+ * @param chat    Указатель на чат
+ * @return Данные для отправки в telegram или nullopt
+ */
+TelegramRequest TelegramController::process_cmd_value_email(const json& body_js, int idx, std::shared_ptr<const Chat> chat) {
+
+    std::string      text  = body_js["result"][idx]["message"]["text"];
+    std::string_view value = text;
+    strip_whitespace(value);
+
+    const std::regex pattern(R"(^[\w\.-]+@[\w\.-]+\.\w{2,4}$)");
+    if (!std::regex_match(static_cast<std::string>(value), pattern)) {
+        return prepare_request_text(chat, "Некорректный Email");
+    }
+
+    Chat chat_edit          = *chat;
+    chat_edit.email.address = value;
+
+    bool ok = m_repo->update(chat_edit);
+    if (!ok) {
+        throw std::runtime_error(std::format("[TelegramController::process_cmd_value_email] failed update chat. chat id: {}", chat->chat_id));
+    }
+
+    return prepare_request_text(chat, "✅ Записал");
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Обработка ответа на команду "/password"
+ * @param body_js Данные в виде JSON объекта
+ * @param idx     Индекс сообщения из массива JSON: ["result"]
+ * @param chat    Указатель на чат
+ * @return Данные для отправки в telegram или nullopt
+ */
+TelegramRequest TelegramController::process_cmd_value_password(const json& body_js, int idx, std::shared_ptr<const Chat> chat) {
+
+    std::string      text  = body_js["result"][idx]["message"]["text"];
+    std::string_view value = text;
+    strip_whitespace(value);
+
+    Chat chat_edit           = *chat;
+    chat_edit.email.password = value;
+
+    bool ok = m_repo->update(chat_edit);
+    if (!ok) {
+        throw std::runtime_error(std::format("[TelegramController::process_cmd_value_password] failed update chat. chat id: {}", chat->chat_id));
+    }
+
+    return prepare_request_text(chat, "✅ Записал");
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Подготовка запроса на команду "/about"
+ * @param chat Указатель на чат
+ * @return Структуру с данными для запроса
+ */
+TelegramRequest TelegramController::prepare_request_about(std::shared_ptr<const Chat> chat) const noexcept {
+
+    constexpr std::string_view text = "<b>Привет! Я твой персональный почтовый фильтр</b> 📨"
+                                      "\n\n"
+                                      "Я буду следить за твоим ящиком и мгновенно пришлю уведомление, "
+                                      "как только придет письмо с важными для тебя словами.\n"
+                                      "Больше никакого спама, только то, что ты ждешь!\n\n"
+                                      "Что мне нужно для старта:\n"
+                                      "📧 <b>Email</b> — адрес, который будем мониторить.\n"
+                                      "🔑 <b>Токен OAuth2 (пароль приложения)</b> — твой ключ безопасности.\n"
+                                      "Например, для Яндекс.Почты нужно создать «Пароль приложения».\n"
+                                      "🏷 <b>Ключевые слова</b> — Если оставить поле пустым, я буду присылать вообще все "
+                                      "письма.\n\n"
+                                      "Для настройки или изменения данных используй меню команд.";
+
+    return prepare_request_text(chat, text);
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Подготовка запроса на команду "/about"
+ * @param chat Указатель на чат
+ * @return Структуру с данными для запроса
+ */
+TelegramRequest TelegramController::prepare_request_status(std::shared_ptr<const Chat> chat) const noexcept {
+
+    std::string text = std::format("<b>Cтатус</b>\n\n"
+                                   "email: {}\n"
+                                   "password: {}\n",
+                                   (chat->email.address.empty() ? "❗️не указан" : chat->email.address),
+                                   (chat->email.password.empty() ? "❗️не указан" : "✅"),
+                                   "💱");
+
+    return prepare_request_text(chat, text);
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Подготовка запроса на команду "/about"
+ * @param chat Указатель на чат
+ * @return Структуру с данными для запроса
+ */
+TelegramRequest TelegramController::prepare_request_email(std::shared_ptr<const Chat> chat) const noexcept {
+
+    json js_body;
+    js_body["chat_id"]      = chat->chat_id;
+    js_body["text"]         = std::format("{}\nВведите Email:", find_command_text(Commands::Email));
+    js_body["reply_markup"] = {{"force_reply", true}, {"input_field_placeholder", "example@mail.com"}};
+
+    return prepare_request_json(chat, js_body);
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Подготовка запроса на команду "/about"
+ * @param chat Указатель на чат
+ * @return Структуру с данными для запроса
+ */
+TelegramRequest TelegramController::prepare_request_password(std::shared_ptr<const Chat> chat) const noexcept {
+
+    json js_body;
+    js_body["chat_id"]      = chat->chat_id;
+    js_body["text"]         = std::format("{}\nВведите пароль:", find_command_text(Commands::Password));
+    js_body["reply_markup"] = {{"force_reply", true}};
+
+    return prepare_request_json(chat, js_body);
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Подготовка запроса на основе текста
+ * @param chat Указатель на чат
+ * @param msg  Текст сообщений, который будет отправлен в запроса
+ * @return Структуру с данными для запроса
+ */
+TelegramRequest TelegramController::prepare_request_text(std::shared_ptr<const Chat> chat, std::string_view msg) const noexcept {
+
+    constexpr std::string_view url = "/bot{}/sendMessage";
+
+    json js_body;
+    js_body["chat_id"]    = chat->chat_id;
+    js_body["text"]       = msg;
+    js_body["parse_mode"] = "HTML";
+
+    // if (!is_notify) {
+    //     body["disable_notification"] = true;
+    // }
+
+    TelegramRequest request;
+    request.url          = std::format(url, m_token);
+    request.body         = js_body.dump();
+    request.content_type = "application/json";
+
+    return request;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Подготовка запроса на основе JSON
+ * @param chat    Указатель на чат
+ * @param js_body JSON
+ * @return Структуру с данными для запроса
+ */
+TelegramRequest TelegramController::prepare_request_json(std::shared_ptr<const Chat> chat, const json& js_body) const noexcept {
+
+    constexpr std::string_view url = "/bot{}/sendMessage";
+
+    TelegramRequest request;
+    request.url          = std::format(url, m_token);
+    request.body         = js_body.dump();
+    request.content_type = "application/json";
+
+    return request;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/*!
+ * @brief Удаление пробелов из текста
+ * @param[in/out] text Текст
+ */
+void TelegramController::strip_whitespace(std::string_view& text) const noexcept {
+
+    const char* whitespace = " ";
+
+    size_t start_pos_no_space = text.find_first_not_of(whitespace);
+    if (start_pos_no_space != std::string::npos) {
+        text.remove_prefix(start_pos_no_space);
+    }
+
+    size_t end_pos_no_space = text.find_last_not_of(whitespace);
+    text.remove_suffix(text.size() - (end_pos_no_space + 1));
 }
 //----------------------------------------------------------------------------------------------------------------------
