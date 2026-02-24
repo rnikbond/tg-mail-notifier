@@ -29,7 +29,7 @@ public:
 private:
 
     std::string m_token;
-    int64_t     m_last_chat_update_id = {0};
+    int64_t     m_last_chat_update_id = {-1};
 
     std::shared_ptr<IRepository> m_repo;
 

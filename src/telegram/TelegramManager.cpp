@@ -11,6 +11,14 @@ TelegramManager::TelegramManager(const std::string& token, const std::string& ho
     , m_repo(repo)
     , m_http(std::make_unique<httplib::Client>(host_port))
     , m_controller(std::make_unique<TelegramController>(token, repo)) {
+
+    if (m_token.empty()) {
+        throw std::runtime_error("telegram token is empty");
+    }
+
+    if (!m_repo) {
+        throw std::runtime_error("repository is not initialized");
+    }
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -27,18 +35,10 @@ TelegramManager::~TelegramManager() {
  */
 void TelegramManager::start() {
 
-    if (m_token.empty()) {
-        throw std::runtime_error("telegram token is empty");
-    }
-
-    if (!m_repo) {
-        throw std::runtime_error("repository is not initialized");
-    }
-
     m_request_stop = false;
     m_thread       = std::thread(&TelegramManager::run, this);
 
-    logger::info("[TelegramManager] start");
+    logger::info("[TelegramManager::start] start");
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -47,7 +47,7 @@ void TelegramManager::start() {
  */
 void TelegramManager::stop() noexcept {
 
-    logger::info("[TelegramManager] stopping...");
+    logger::info("[TelegramManager::stop] stopping...");
 
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -59,7 +59,7 @@ void TelegramManager::stop() noexcept {
         m_thread.join();
     }
 
-    logger::info("[TelegramManager] stopped");
+    logger::info("[TelegramManager::stop] stopped");
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -68,18 +68,19 @@ void TelegramManager::stop() noexcept {
  */
 void TelegramManager::run() {
 
-    constexpr std::string_view url_template = "/bot{}/getUpdates?offset={}";
+    constexpr std::string_view url_template = "/bot{}/getUpdates?offset={}&timeout=10";
 
     while (true) {
 
         std::unique_lock<std::mutex> lock(m_mutex);
 
-        std::string     url = std::format(url_template, m_token, m_last_chat_update_id);
+        int64_t         upd_id = (m_last_chat_update_id == -1) ? -1 : m_last_chat_update_id + 1;
+        std::string     url    = std::format(url_template, m_token, upd_id);
         httplib::Result msg = m_http->Get(url);
         if (!msg) {
             auto err = msg.error();
             logger::error(std::format("[TelegramManager] http::Get({}) returned error: {}", url, httplib::to_string(err)));
-            break;
+            continue;
         }
 
         try {
@@ -92,12 +93,12 @@ void TelegramManager::run() {
             }
 
         } catch (const std::exception& ex) {
-            logger::error(std::format("error process telegram response: {}", ex.what()));
+            logger::error(std::format("[TelegramManager::run] error process telegram response: {}", ex.what()));
         }
 
         bool is_stop = m_wait_cond.wait_for(lock, std::chrono::seconds(1), [&]() { return m_request_stop; });
         if (is_stop) {
-            logger::info("[TelegramManager] request to stop");
+            logger::info("[TelegramManager::run] request to stop");
             break;
         }
     }

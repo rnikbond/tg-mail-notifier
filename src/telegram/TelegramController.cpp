@@ -75,7 +75,21 @@ TelegramController::TelegramController(const std::string& token, std::shared_ptr
  */
 RequestOpt TelegramController::process(const TelegramResponse&& response, int64_t& last_msg_id) {
 
-    json body_js = json::parse(response.body);
+    json body_js;
+    try {
+        body_js = json::parse(response.body);
+    } catch (json::parse_error& e) {
+        logger::error("[TelegramController::process] failed parse JSON:\n"
+                      "error: {}\n"
+                      "error id: {}\n,"
+                      "position: {}",
+                      e.what(),
+                      e.id,
+                      e.byte);
+        throw;
+    }
+
+    logger::debug(body_js.dump(4));
 
     if (!body_js.contains("result")) {
         throw std::runtime_error("[TelegramController::process] invalid JSON: does not contains 'result'");
@@ -98,10 +112,10 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
     }
 
     //: Запоминаем идентификатор обработанного сообщения
-    if (last_msg_id == 0) {
-        last_msg_id = update_id;
-        return std::nullopt;
-    }
+    // if (last_msg_id == 0) {
+    //     last_msg_id = update_id;
+    //     return std::nullopt;
+    // }
     last_msg_id = update_id;
 
     int64_t chat_id;

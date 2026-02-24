@@ -20,6 +20,7 @@ set(INCLUDE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/../include/storage/IStorage.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../include/repository/IRepository.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../include/chat/Chat.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include/telegram/TelegramAPI.h
 )
 
 ## Перечисление исходников
@@ -28,6 +29,8 @@ set(SRC_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/cache/Cache.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/storage/memory/MemoryStorage.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/storage/memory/MemoryStorage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/telegram/TelegramController.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/telegram/TelegramController.cpp
 )
 
 ## Добавление исходников к проекту
