@@ -11,6 +11,21 @@
 //----------------------------------------------------------
 using json = nlohmann::json;
 //----------------------------------------------------------
+class MockMailRequest : public IMailRequest {
+
+public:
+
+    MockMailRequest()  = default;
+    ~MockMailRequest() = default;
+
+    [[nodiscard]] virtual UIDsOpt load_uids(const Email& email) const noexcept override {
+        return {};
+    }
+    [[nodiscard]] virtual UIDOpt last_uid(const Email& email) const noexcept override {
+        return 0;
+    }
+};
+//----------------------------------------------------------------------------------------------------------------------
 
 /**
  * @brief Тестирование наличия исключений при создании объекта
@@ -21,11 +36,11 @@ using json = nlohmann::json;
  */
 TEST(TelegramController, CheckExceptionToken) {
 
-    ASSERT_ANY_THROW(TelegramController("QwEwEr", nullptr));
+    ASSERT_ANY_THROW(TelegramController("QwEwEr", nullptr, std::make_unique<MockMailRequest>()));
 
     auto memory = std::make_unique<MemoryStorage>();
     auto cache  = std::make_shared<Cache>(std::move(memory));
-    ASSERT_ANY_THROW(TelegramController("", nullptr));
+    ASSERT_ANY_THROW(TelegramController("", cache, nullptr));
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -49,7 +64,7 @@ TEST(TelegramController, CheckInvalidJSON) {
     std::string token       = "QwEwEr";
     int64_t     last_upd_id = 0;
 
-    TelegramController controller(token, cache);
+    TelegramController controller(token, cache, std::make_unique<MockMailRequest>());
 
     for (auto& response : tests) {
         //ASSERT_ANY_THROW(controller.process(std::move(response), last_upd_id));
@@ -421,7 +436,7 @@ TEST(TelegramController, CheckChainNewUser) {
         auto memory = std::make_unique<MemoryStorage>();
         auto cache  = std::make_shared<Cache>(std::move(memory));
 
-        TelegramController controller(token, cache);
+        TelegramController controller(token, cache, std::make_unique<MockMailRequest>());
 
         TestData test = std::move(tests.front());
         tests.pop_front();

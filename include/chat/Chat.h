@@ -51,6 +51,7 @@ struct Email
     std::set<std::string> addr_filter_rules;  ///< Фильтры по отправителям. Например: {"info@service.ru", "*@sales.ru"}
     std::set<std::string> title_filter_rules; ///< Фильтры по заголовку письма
     std::set<std::string> body_filter_rules;  ///< Фильтры по телу письма
+    int64_t               last_uid = {-1};
 
     /// @brief Пороверка корректности почты
     bool is_valid() const {

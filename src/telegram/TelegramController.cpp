@@ -4,6 +4,8 @@
 #include "nlohmann/json.hpp"
 #include <spdlog/spdlog.h>
 //----------------------------------------------------------
+#include "chat/Chat.h"
+//----------------------------------------------------------
 #include "TelegramController.h"
 //----------------------------------------------------------
 namespace logger = spdlog;
@@ -14,13 +16,14 @@ namespace {
 /**
  * @brief  Поддерживаемые команды
  */
-enum Commands {
-    None,     ///< Отсутствие занчения
-    Start,    ///< Команда "/start"
-    About,    ///< Команда "/about"
-    Status,   ///< Команда "/status"
-    Email,    ///< Команда "/email"
-    Password, ///< Команда "/password"
+enum class Commands {
+    None,           ///< Отсутствие занчения
+    Start,          ///< Команда "/start"
+    About,          ///< Команда "/about"
+    Status,         ///< Команда "/status"
+    Email,          ///< Команда "/email"
+    Password,       ///< Команда "/password"
+    ClearEmailAuth, ///< Команда "/clear_email_auth"
 };
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -30,6 +33,7 @@ const std::unordered_map<std::string, Commands> g_commands_map = {
     {"/status", Commands::Status},
     {"/email", Commands::Email},
     {"/password", Commands::Password},
+    {"/clear_email_auth", Commands::ClearEmailAuth},
 };
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -53,9 +57,10 @@ std::string find_command_text(Commands cmd) {
 } // namespace
 //----------------------------------------------------------------------------------------------------------------------
 
-TelegramController::TelegramController(const std::string& token, std::shared_ptr<IRepository> repo)
+TelegramController::TelegramController(const std::string& token, std::shared_ptr<IRepository> repo, std::unique_ptr<IMailRequest> mail)
     : m_repo(repo)
-    , m_token(token) {
+    , m_token(token)
+    , m_mail_req(std::move(mail)) {
 
     if (token.empty()) {
         throw std::runtime_error("telegram token is empty");
@@ -64,6 +69,43 @@ TelegramController::TelegramController(const std::string& token, std::shared_ptr
     if (!repo) {
         throw std::runtime_error("invalid repository");
     }
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/*!
+ * @brief Получение запроса для отправки команд в telegram бот
+ * @return 
+ */
+RequestOpt TelegramController::commands() const {
+
+    auto cmd_text = [&](Commands cmd) -> std::string {
+        std::string text = find_command_text(cmd);
+
+        text = text.substr(1, text.length() - 1);
+        return text;
+    };
+
+    // clang-format off
+    json js_body = {
+        { "commands", {
+                {{"command", cmd_text(Commands::About)   }, {"description", "Обо мне"}},
+                {{"command", cmd_text(Commands::Status)  }, {"description", "Текущее состояние"}},
+                {{"command", cmd_text(Commands::Email)   }, {"description", "Изменить email"}},
+                {{"command", cmd_text(Commands::Password)}, {"description", "Изменить пароль Email"}},
+                {{"command", cmd_text(Commands::ClearEmailAuth)}, {"description", "Очистить Email и пароль"}},
+            }
+        }
+    };
+    // clang-format on
+
+    constexpr std::string_view url = "/bot{}/setMyCommands";
+
+    TelegramRequest request;
+    request.url          = std::format(url, m_token);
+    request.body         = js_body.dump();
+    request.content_type = "application/json";
+
+    return request;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -242,6 +284,7 @@ RequestOpt TelegramController::handle_reply_on_cmd(const json& body_js, int idx,
         throw std::runtime_error(std::format("[TelegramController::handle_reply_on_cmd] unknown command: {}", command_text));
     }
 
+    TelegramRequest request;
     Commands cmd = g_commands_map.at(command_text);
     switch (cmd) {
         case Commands::Email:
@@ -289,6 +332,8 @@ RequestOpt TelegramController::handle_cmd(const json& body_js, int idx, std::sha
             return prepare_request_email(chat);
         case Commands::Password:
             return prepare_request_password(chat);
+        case Commands::ClearEmailAuth:
+            return process_cmd_clear_email_auth(chat);
         default:
             logger::error("[TelegramController::handle_cmd] no case for command: {}", command_text);
             throw std::runtime_error(std::format("[TelegramController::handle_cmd] no case command: {}", command_text));
@@ -316,12 +361,24 @@ TelegramRequest TelegramController::process_cmd_value_email(const json& body_js,
         return prepare_request_text(chat, "Некорректный Email");
     }
 
-    Chat chat_edit          = *chat;
-    chat_edit.email.address = value;
+    Email email   = chat->email;
+    email.address = value;
+    if (!email.address.empty() && !email.password.empty()) {
+        auto res = check_email_auth(chat->chat_id, email);
+        if (!res.has_value()) {
+            return prepare_request_text(chat, "❌ Ошибка авторизации на почте: некорректный адрес электронной почты");
+        }
 
-    bool ok = m_repo->update(chat_edit);
+        email.last_uid = res.value();
+    }
+
+    bool ok = m_repo->update_email(chat->chat_id, email);
     if (!ok) {
         throw std::runtime_error(std::format("[TelegramController::process_cmd_value_email] failed update chat. chat id: {}", chat->chat_id));
+    }
+
+    if (!email.address.empty() && !email.password.empty()) {
+        return prepare_request_text(chat, "✅ Email настроен. Как появятся новые письма, буду пересылать их в этот чат");
     }
 
     return prepare_request_text(chat, "✅ Записал");
@@ -341,15 +398,47 @@ TelegramRequest TelegramController::process_cmd_value_password(const json& body_
     std::string_view value = text;
     strip_whitespace(value);
 
-    Chat chat_edit           = *chat;
-    chat_edit.email.password = value;
+    Email email    = chat->email;
+    email.password = value;
+    if (!email.address.empty() && !email.password.empty()) {
+        auto res = check_email_auth(chat->chat_id, email);
+        if (!res.has_value()) {
+            return prepare_request_text(chat, "❌ Ошибка авторизации на почте: некорректный пароль");
+        }
 
-    bool ok = m_repo->update(chat_edit);
+        email.last_uid = res.value();
+    }
+
+    bool ok = m_repo->update_email(chat->chat_id, email);
     if (!ok) {
         throw std::runtime_error(std::format("[TelegramController::process_cmd_value_password] failed update chat. chat id: {}", chat->chat_id));
     }
 
+    if (!email.address.empty() && !email.password.empty()) {
+        return prepare_request_text(chat, "✅ Email настроен. Как появятся новые письма, буду пересылать их в этот чат");
+    }
+
     return prepare_request_text(chat, "✅ Записал");
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/*!
+ * @brief Обработка ответа на команду "/password"
+ * @param chat Указатель на чат
+ * @return 
+ */
+TelegramRequest TelegramController::process_cmd_clear_email_auth(std::shared_ptr<const Chat> chat) {
+
+    Email email = chat->email;
+    email.address.clear();
+    email.password.clear();
+
+    bool ok = m_repo->update_email(chat->chat_id, email);
+    if (!ok) {
+        throw std::runtime_error(std::format("[TelegramController::process_cmd_clear_email_auth] failed update email. chat id: {}", chat->chat_id));
+    }
+
+    return prepare_request_text(chat, "✅ Удалить email и пароль");
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -471,6 +560,24 @@ TelegramRequest TelegramController::prepare_request_json(std::shared_ptr<const C
     request.content_type = "application/json";
 
     return request;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/*!
+ * @brief Проверка авторизации email
+ * @param chat_id Идентификатор чата
+ * @param email   Данные Email
+ * @return UID последнего сообщения или nullopt, если не удалось получить
+ */
+std::optional<int64_t> TelegramController::check_email_auth(int64_t chat_id, const Email& email) const noexcept {
+
+    auto res = m_mail_req->last_uid(email);
+    if (res.has_value()) {
+        return res.value();
+    }
+
+    logger::info("[TelegramController::check_email_auth] failed load last uid: {}", static_cast<int>(res.error()));
+    return std::nullopt;
 }
 //----------------------------------------------------------------------------------------------------------------------
 

@@ -6,6 +6,7 @@
 //----------------------------------------------------------
 #include "cache/Cache.h"
 #include "core/Config.h"
+#include "mail/MailManager.h"
 #include "storage/memory/MemoryStorage.h"
 #include "telegram/TelegramManager.h"
 //----------------------------------------------------------
@@ -23,13 +24,16 @@ int main(int argc, char **argv) {
     std::unique_ptr<MemoryStorage>   m_storage;
     std::shared_ptr<Cache>           m_cache;
     std::shared_ptr<TelegramManager> m_tg_manager;
+    std::shared_ptr<MailManager>     m_mail_manager;
 
     try {
-        m_storage    = std::make_unique<MemoryStorage>();
-        m_cache      = std::make_shared<Cache>(std::move(m_storage));
-        m_tg_manager = std::make_shared<TelegramManager>(cfg.m_tg_token, cfg.m_tg_host_port, m_cache);
+        m_storage      = std::make_unique<MemoryStorage>();
+        m_cache        = std::make_shared<Cache>(std::move(m_storage));
+        m_tg_manager   = std::make_shared<TelegramManager>(cfg.m_tg_token, cfg.m_tg_host_port, m_cache);
+        m_mail_manager = std::make_shared<MailManager>(m_cache);
 
         m_tg_manager->start();
+        m_mail_manager->start();
 
     } catch (const std::exception &ex) {
         logger::error("error starting: {}", ex.what());
@@ -44,6 +48,7 @@ int main(int argc, char **argv) {
         if (command == "stop") {
             std::cout << "Принята команда на остановку..." << std::endl;
 
+            m_mail_manager->stop();
             m_tg_manager->stop();
 
             break;

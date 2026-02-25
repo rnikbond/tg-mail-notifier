@@ -1,6 +1,8 @@
 //----------------------------------------------------------
 #include <spdlog/spdlog.h>
 //----------------------------------------------------------
+#include "../src/mail/MailRequest.h"
+//----------------------------------------------------------
 #include "TelegramManager.h"
 //----------------------------------------------------------
 namespace logger = spdlog;
@@ -10,7 +12,7 @@ TelegramManager::TelegramManager(const std::string& token, const std::string& ho
     : m_token(token)
     , m_repo(repo)
     , m_http(std::make_unique<httplib::Client>(host_port))
-    , m_controller(std::make_unique<TelegramController>(token, repo)) {
+    , m_controller(std::make_unique<TelegramController>(token, repo, std::make_unique<MailRequest>())) {
 
     if (m_token.empty()) {
         throw std::runtime_error("telegram token is empty");
@@ -35,10 +37,19 @@ TelegramManager::~TelegramManager() {
  */
 void TelegramManager::start() {
 
+    logger::info("[TelegramManager::start] start");
+
+    { //: Инициализация команд
+        auto request  = m_controller->commands();
+        auto response = m_http->Post(request->url, request->body, request->content_type);
+        if (!response || response->status != httplib::OK_200) {
+            auto err = response.error();
+            throw std::runtime_error(std::format("[TelegramManager::start] failed init bot commands: {}, {}", response->status, httplib::to_string(err)));
+        }
+    }
+
     m_request_stop = false;
     m_thread       = std::thread(&TelegramManager::run, this);
-
-    logger::info("[TelegramManager::start] start");
 }
 //----------------------------------------------------------------------------------------------------------------------
 

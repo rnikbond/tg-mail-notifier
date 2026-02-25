@@ -22,7 +22,7 @@ void MemoryStorage::create(const Chat& chat) {
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-void MemoryStorage::udpate(const Chat& chat) {
+void MemoryStorage::update(const Chat& chat) {
 
     if (!m_data.contains(chat.chat_id)) {
         throw std::runtime_error(std::format("chat not found. chat id: {}", chat.chat_id));

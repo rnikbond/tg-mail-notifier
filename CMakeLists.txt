@@ -50,6 +50,10 @@ add_executable(tg-mail-notifier
     src/telegram/TelegramManager.h src/telegram/TelegramManager.cpp
     include/telegram/TelegramAPI.h
     src/telegram/TelegramController.h src/telegram/TelegramController.cpp
+    src/mail/MailManager.h src/mail/MailManager.cpp
+    src/mail/MailRequest.h src/mail/MailRequest.cpp
+    include/errs/Errors.h
+    include/mail/IMailRequest.h
 )
 
 ## Добавление доп. библиотек

@@ -40,6 +40,14 @@ public:
     [[nodiscard]] virtual bool update(const Chat& chat) noexcept = 0;
 
     /**
+     * @brief Обновление информации о Email
+     * @param chat_id Иденитификатор чата
+     * @param email   Обновленные данные email
+     * @return TRUE, если данные обновлены. Иначе FALSE.
+     */
+    [[nodiscard]] virtual bool update_email(int64_t chat_id, const Email& email) noexcept = 0;
+
+    /**
      * @brief Поиск чата
      * @param chat_ids Идентификаторы чатов
      * @return Указатель на чат или nullopt, если он не найден
@@ -48,7 +56,7 @@ public:
 
     /**
      * @brief Получение карты чатов и email
-     * @return арта: <chat_id> = Email
+     * @return карта: <chat_id> = Email
      */
     [[nodiscard]] virtual std::unordered_map<int64_t, Email> chats() noexcept = 0;
 };

@@ -19,7 +19,7 @@ public:
 public:
 
     virtual void create(const Chat& chat) override;
-    virtual void udpate(const Chat& chat) override;
+    virtual void update(const Chat& chat) override;
     virtual std::optional<std::vector<Chat>> find(const std::vector<int64_t>& chat_ids) const noexcept override;
     virtual std::vector<int64_t> chat_ids() const noexcept override;
 

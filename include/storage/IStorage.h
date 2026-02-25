@@ -27,7 +27,7 @@ public:
      * @brief Обновление данных о чате
      * @param chat Данные чата
      */
-    virtual void udpate(const Chat& chat) = 0;
+    virtual void update(const Chat& chat) = 0;
 
     /**
      * @brief Поиск чата

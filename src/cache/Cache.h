@@ -25,6 +25,7 @@ public:
 
     [[nodiscard]] virtual ChatOpt create(const Chat& chat) noexcept override;
     [[nodiscard]] virtual bool update(const Chat& chat) noexcept override;
+    [[nodiscard]] virtual bool update_email(int64_t chat_id, const Email& email) noexcept override;
     [[nodiscard]] virtual ChatsOpt find(const std::vector<int64_t>& chat_ids) noexcept override;
     [[nodiscard]] virtual std::unordered_map<int64_t, Email> chats() noexcept override;
 

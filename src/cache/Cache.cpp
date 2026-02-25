@@ -51,9 +51,34 @@ bool Cache::update(const Chat& chat) noexcept {
     std::unique_lock lock(m_mutex);
 
     try {
-        m_storage->udpate(chat);
+        m_storage->update(chat);
     } catch (const std::exception& ex) {
         logger::error("[Cache::update] failed update in storage: {}. chat id = {}", ex.what(), chat.chat_id);
+        return false;
+    }
+
+    m_data[chat.chat_id] = std::make_shared<Chat>(chat);
+    return true;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+bool Cache::update_email(int64_t chat_id, const Email& email) noexcept {
+
+    auto res = find({chat_id});
+    if (!res.has_value() || res.value().size() != 1) {
+        logger::error("not found chat: {}", chat_id);
+        return false;
+    }
+
+    std::unique_lock lock(m_mutex);
+
+    Chat chat  = *res.value().at(0);
+    chat.email = email;
+
+    try {
+        m_storage->update(chat);
+    } catch (const std::exception& ex) {
+        logger::error("[Cache::update_email] failed update in storage: {}. chat id = {}", ex.what(), chat.chat_id);
         return false;
     }
 
