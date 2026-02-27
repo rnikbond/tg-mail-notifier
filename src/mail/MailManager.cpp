@@ -6,14 +6,6 @@
 namespace logger = spdlog;
 //----------------------------------------------------------
 
-// Callback для записи данных в строку
-size_t WriteCallbackMail(void* contents, size_t size, size_t nmemb, std::string* s) {
-    size_t newLength = size * nmemb;
-    s->append((char*) contents, newLength);
-    return newLength;
-}
-//----------------------------------------------------------------------------------------------------------------------
-
 MailManager::MailManager(std::shared_ptr<IRepository> repo)
     : m_repo(repo) {
 }
@@ -79,7 +71,12 @@ void MailManager::scan_emails() {
 
     for (auto& [chat_id, email] : chats_map) {
 
-        std::vector<int64_t> uids = load_uids(email);
+        auto uids_opt = load_uids(email);
+        if (!uids_opt.has_value()) {
+            continue;
+        }
+
+        std::vector<int64_t> uids = std::move(uids_opt.value());
         if (uids.empty()) {
             continue;
         }
@@ -88,15 +85,24 @@ void MailManager::scan_emails() {
             continue;
         }
 
-        if (email.last_uid == 0) {
-            email.last_uid = uids.back();
-            if (m_repo->update_email(chat_id, email)) {
-                logger::info("[MailManager::scan_emails] inint email uid. email: {}, uid: {}", email.address, email.last_uid);
-            }
-            continue;
-        }
-
         std::erase_if(uids, [uid_now = email.last_uid](int64_t uid) { return uid <= uid_now; });
+
+        for (int64_t uid : uids) {
+            auto msg_opt = load_email_msg(email, uid);
+            if (!msg_opt.has_value()) {
+                continue;
+            }
+        }
     }
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+std::optional<std::vector<int64_t>> MailManager::load_uids(const Email& email) {
+    return std::nullopt;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+std::optional<std::string> MailManager::load_email_msg(const Email& email, int64_t uid) {
+    return std::nullopt;
 }
 //----------------------------------------------------------------------------------------------------------------------

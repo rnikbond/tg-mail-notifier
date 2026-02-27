@@ -6,11 +6,16 @@
 #include "nlohmann/json.hpp"
 //----------------------------------------------------------
 #include "../src/cache/Cache.h"
+#include "../src/mail/MailFactory.h"
 #include "../src/storage/memory/MemoryStorage.h"
 #include "../src/telegram/TelegramController.h"
+#include "mail/IMailRequest.h"
 //----------------------------------------------------------
 using json = nlohmann::json;
 //----------------------------------------------------------
+using MailCreatorType = std::function<std::unique_ptr<IMailRequest>()>;
+//----------------------------------------------------------
+
 class MockMailRequest : public IMailRequest {
 
 public:
@@ -18,11 +23,23 @@ public:
     MockMailRequest()  = default;
     ~MockMailRequest() = default;
 
-    [[nodiscard]] virtual UIDsOpt load_uids(const Email& email) const noexcept override {
+    UIDsOpt load_uids(const Email& email) const noexcept override {
         return {};
     }
-    [[nodiscard]] virtual UIDOpt last_uid(const Email& email) const noexcept override {
+    UIDOpt last_uid(const Email& email) const noexcept override {
         return 0;
+    }
+};
+//----------------------------------------------------------------------------------------------------------------------
+
+class ScopedMailMock {
+public:
+
+    ScopedMailMock() {
+        MailFactory::setCreator([]() { return std::make_unique<MockMailRequest>(); });
+    }
+    ~ScopedMailMock() {
+        MailFactory::resetCreator();
     }
 };
 //----------------------------------------------------------------------------------------------------------------------
@@ -36,11 +53,13 @@ public:
  */
 TEST(TelegramController, CheckExceptionToken) {
 
-    ASSERT_ANY_THROW(TelegramController("QwEwEr", nullptr, std::make_unique<MockMailRequest>()));
+    //ScopedMailMock scope_guard([]() { return std::make_unique<MockMailRequest>(); });
+
+    ASSERT_ANY_THROW(TelegramController("QwEwEr", nullptr));
 
     auto memory = std::make_unique<MemoryStorage>();
     auto cache  = std::make_shared<Cache>(std::move(memory));
-    ASSERT_ANY_THROW(TelegramController("", cache, nullptr));
+    ASSERT_ANY_THROW(TelegramController("", cache));
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -50,6 +69,8 @@ TEST(TelegramController, CheckExceptionToken) {
  * Ошижидается исключение
  */
 TEST(TelegramController, CheckInvalidJSON) {
+
+    //ScopedMailMock scope_guard([]() { return std::make_unique<MockMailRequest>(); });
 
     std::vector<TelegramResponse> tests = {
         {""},
@@ -64,7 +85,7 @@ TEST(TelegramController, CheckInvalidJSON) {
     std::string token       = "QwEwEr";
     int64_t     last_upd_id = 0;
 
-    TelegramController controller(token, cache, std::make_unique<MockMailRequest>());
+    TelegramController controller(token, cache);
 
     for (auto& response : tests) {
         //ASSERT_ANY_THROW(controller.process(std::move(response), last_upd_id));
@@ -182,6 +203,8 @@ TEST(TelegramController, CheckIncompleteJSON) {
 //----------------------------------------------------------------------------------------------------------------------
 
 TEST(TelegramController, CheckChainNewUser) {
+
+    //ScopedMailMock scope_guard([]() { return std::make_unique<MockMailRequest>(); });
 
     std::string token = "QwEwEr";
 
@@ -436,7 +459,7 @@ TEST(TelegramController, CheckChainNewUser) {
         auto memory = std::make_unique<MemoryStorage>();
         auto cache  = std::make_shared<Cache>(std::move(memory));
 
-        TelegramController controller(token, cache, std::make_unique<MockMailRequest>());
+        TelegramController controller(token, cache);
 
         TestData test = std::move(tests.front());
         tests.pop_front();

@@ -1,8 +1,6 @@
 //----------------------------------------------------------
 #include <spdlog/spdlog.h>
 //----------------------------------------------------------
-#include "../src/mail/MailRequest.h"
-//----------------------------------------------------------
 #include "TelegramManager.h"
 //----------------------------------------------------------
 namespace logger = spdlog;
@@ -12,7 +10,7 @@ TelegramManager::TelegramManager(const std::string& token, const std::string& ho
     : m_token(token)
     , m_repo(repo)
     , m_http(std::make_unique<httplib::Client>(host_port))
-    , m_controller(std::make_unique<TelegramController>(token, repo, std::make_unique<MailRequest>())) {
+    , m_controller(std::make_unique<TelegramController>(token, repo)) {
 
     if (m_token.empty()) {
         throw std::runtime_error("telegram token is empty");

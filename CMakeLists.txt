@@ -30,30 +30,29 @@ set(INCLUDES
     include/storage/IStorage.h
     include/repository/IRepository.h
     include/chat/Chat.h
+    include/errs/Errors.h
+    include/mail/IMailRequest.h
+    include/telegram/TelegramAPI.h
+    include/telegram/ITelegramSender.h
 )
 
 ## Перечисление исходников
 set(SOURCES
     src/main.cpp
-    src/core/Config.h
-    src/core/Config.cpp
-    src/cache/Cache.h
-    src/cache/Cache.cpp
-    src/storage/memory/MemoryStorage.h
-    src/storage/memory/MemoryStorage.cpp
+    src/core/Config.h                  src/core/Config.cpp
+    src/cache/Cache.h                  src/cache/Cache.cpp
+    src/storage/memory/MemoryStorage.h src/storage/memory/MemoryStorage.cpp
+    src/telegram/TelegramManager.h     src/telegram/TelegramManager.cpp
+    src/mail/MailManager.h             src/mail/MailManager.cpp
+    src/mail/MailRequest.h             src/mail/MailRequest.cpp
+    src/mail/MailFactory.h             src/mail/MailFactory.cpp
+    src/telegram/TelegramController.h  src/telegram/TelegramController.cpp
 )
 
 ## Добавление исходников к проекту
 add_executable(tg-mail-notifier
     ${INCLUDES}
     ${SOURCES}
-    src/telegram/TelegramManager.h src/telegram/TelegramManager.cpp
-    include/telegram/TelegramAPI.h
-    src/telegram/TelegramController.h src/telegram/TelegramController.cpp
-    src/mail/MailManager.h src/mail/MailManager.cpp
-    src/mail/MailRequest.h src/mail/MailRequest.cpp
-    include/errs/Errors.h
-    include/mail/IMailRequest.h
 )
 
 ## Добавление доп. библиотек

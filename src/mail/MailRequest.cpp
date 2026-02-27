@@ -15,10 +15,6 @@ size_t write_callback_response(void* contents, size_t size, size_t nmemb, std::s
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-MailRequest::MailRequest() {
-}
-//----------------------------------------------------------------------------------------------------------------------
-
 UIDsOpt MailRequest::load_uids(const Email& email) const noexcept {
 
     std::string request = std::format("UID FETCH {}:* (FLAGS)", email.last_uid);

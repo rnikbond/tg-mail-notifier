@@ -4,6 +4,8 @@
 #include "nlohmann/json.hpp"
 #include <spdlog/spdlog.h>
 //----------------------------------------------------------
+#include "../mail/MailFactory.h"
+#include "../mail/MailRequest.h"
 #include "chat/Chat.h"
 //----------------------------------------------------------
 #include "TelegramController.h"
@@ -57,10 +59,9 @@ std::string find_command_text(Commands cmd) {
 } // namespace
 //----------------------------------------------------------------------------------------------------------------------
 
-TelegramController::TelegramController(const std::string& token, std::shared_ptr<IRepository> repo, std::unique_ptr<IMailRequest> mail)
+TelegramController::TelegramController(const std::string& token, std::shared_ptr<IRepository> repo)
     : m_repo(repo)
-    , m_token(token)
-    , m_mail_req(std::move(mail)) {
+    , m_token(token) {
 
     if (token.empty()) {
         throw std::runtime_error("telegram token is empty");
@@ -571,7 +572,7 @@ TelegramRequest TelegramController::prepare_request_json(std::shared_ptr<const C
  */
 std::optional<int64_t> TelegramController::check_email_auth(int64_t chat_id, const Email& email) const noexcept {
 
-    auto res = m_mail_req->last_uid(email);
+    auto res = MailFactory::create()->last_uid(email);
     if (res.has_value()) {
         return res.value();
     }

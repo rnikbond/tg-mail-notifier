@@ -21,16 +21,16 @@ set(INCLUDE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/../include/repository/IRepository.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../include/chat/Chat.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../include/telegram/TelegramAPI.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include/mail/IMailRequest.h
 )
 
 ## Перечисление исходников
 set(SRC_FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/cache/Cache.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/cache/Cache.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/storage/memory/MemoryStorage.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/storage/memory/MemoryStorage.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/telegram/TelegramController.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/telegram/TelegramController.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/cache/Cache.h                  ${CMAKE_CURRENT_SOURCE_DIR}/../src/cache/Cache.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/storage/memory/MemoryStorage.h ${CMAKE_CURRENT_SOURCE_DIR}/../src/storage/memory/MemoryStorage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/mail/MailRequest.h             ${CMAKE_CURRENT_SOURCE_DIR}/../src/mail/MailRequest.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/mail/MailFactory.h             ${CMAKE_CURRENT_SOURCE_DIR}/../src/mail/MailFactory.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/telegram/TelegramController.h  ${CMAKE_CURRENT_SOURCE_DIR}/../src/telegram/TelegramController.cpp
 )
 
 ## Добавление исходников к проекту
@@ -45,6 +45,8 @@ target_link_libraries(unit_tests PRIVATE
     GTest::gtest
     GTest::gtest_main
     spdlog::spdlog
+    nlohmann_json::nlohmann_json
+    CURL::libcurl
 )
 
 enable_testing()

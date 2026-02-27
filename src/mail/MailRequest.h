@@ -8,7 +8,8 @@
 class MailRequest : public IMailRequest {
 public:
 
-    MailRequest();
+    MailRequest()  = default;
+    ~MailRequest() = default;
 
     [[nodiscard]] UIDsOpt load_uids(const Email& email) const noexcept override;
     [[nodiscard]] UIDOpt last_uid(const Email& email) const noexcept override;

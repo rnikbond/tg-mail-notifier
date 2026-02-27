@@ -6,7 +6,6 @@
 //----------------------------------------------------------
 #include "nlohmann/json_fwd.hpp"
 //----------------------------------------------------------
-#include "mail/IMailRequest.h"
 #include "repository/IRepository.h"
 #include "telegram/TelegramAPI.h"
 //----------------------------------------------------------
@@ -19,7 +18,7 @@ class TelegramController {
 
 public:
 
-    TelegramController(const std::string& token, std::shared_ptr<IRepository> repo, std::unique_ptr<IMailRequest> mail);
+    TelegramController(const std::string& token, std::shared_ptr<IRepository> repo);
 
     RequestOpt commands() const;
     RequestOpt process(const TelegramResponse&& response, int64_t& last_msg_id);
@@ -28,7 +27,6 @@ private:
 
     std::string                   m_token;
     std::shared_ptr<IRepository>  m_repo;
-    std::unique_ptr<IMailRequest> m_mail_req;
 
 private:
 

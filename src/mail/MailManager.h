@@ -33,7 +33,8 @@ private:
 
     void scan_emails();
 
-    std::vector<int64_t> load_uids(const Email& email);
+    std::optional<std::vector<int64_t>> load_uids(const Email& email);
+    std::optional<std::string> load_email_msg(const Email& email, int64_t uid);
 };
 //----------------------------------------------------------------------------------------------------------------------
 
