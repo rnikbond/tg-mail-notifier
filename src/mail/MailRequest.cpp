@@ -1,5 +1,6 @@
 //----------------------------------------------------------
 #include <curl/curl.h>
+#include <gmime/gmime.h>
 #include <spdlog/spdlog.h>
 //----------------------------------------------------------
 #include "MailRequest.h"
@@ -17,7 +18,7 @@ size_t write_callback_response(void* contents, size_t size, size_t nmemb, std::s
 
 UIDsOpt MailRequest::load_uids(const Email& email) const noexcept {
 
-    std::string request = std::format("UID FETCH {}:* (FLAGS)", email.last_uid);
+    std::string request = std::format("UID FETCH {}:* (FLAGS)", email.last_uid + 1);
     std::string response;
 
     auto err = execute(email, request, response);
@@ -76,6 +77,20 @@ UIDOpt MailRequest::last_uid(const Email& email) const noexcept {
 }
 //----------------------------------------------------------------------------------------------------------------------
 
+EmailMsgExp MailRequest::fetch_email(const Email& email, int64_t uid) const noexcept {
+
+    std::string url = std::format("imaps://imap.yandex.ru/INBOX/;UID={}", uid);
+    std::string response;
+
+    auto err = execute_body(email, url, response);
+    if (err != Errors::Mail::OK) {
+        return std::unexpected(err);
+    }
+
+    return response;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
 Errors::Mail MailRequest::execute(const Email& email, const std::string& request, std::string& response) const {
 
     auto deleter = [](CURL* curl) { curl_easy_cleanup(curl); };
@@ -85,11 +100,6 @@ Errors::Mail MailRequest::execute(const Email& email, const std::string& request
         logger::error("[MailManager::execute] failed create CURL");
         return Errors::Mail::Internal;
     }
-
-    enum {
-        REQ_TYPE_ALL,
-        REQ_TYPE_FROM,
-    };
 
     curl_easy_setopt(curl.get(), CURLOPT_USERNAME, email.address.c_str());
     curl_easy_setopt(curl.get(), CURLOPT_PASSWORD, email.password.c_str());
@@ -113,5 +123,112 @@ Errors::Mail MailRequest::execute(const Email& email, const std::string& request
             logger::error("[MailManager::execute] error CURL: {}", curl_easy_strerror(res));
             return Errors::Mail::Internal;
     }
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+Errors::Mail MailRequest::execute_body(const Email& email, const std::string& url, std::string& response) const {
+
+    auto deleter = [](CURL* curl) { curl_easy_cleanup(curl); };
+
+    std::unique_ptr<CURL, decltype(deleter)> curl(curl_easy_init(), deleter);
+    if (!curl) {
+        logger::error("[MailManager::execute_body] failed create CURL");
+        return Errors::Mail::Internal;
+    }
+
+    curl_easy_setopt(curl.get(), CURLOPT_USERNAME, email.address.c_str());
+    curl_easy_setopt(curl.get(), CURLOPT_PASSWORD, email.password.c_str());
+
+    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl.get(), CURLOPT_CUSTOMREQUEST, NULL);
+    curl_easy_setopt(curl.get(), CURLOPT_NOBODY, 0L);
+
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, write_callback_response);
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &response);
+
+    CURLcode res = curl_easy_perform(curl.get());
+    switch (res) {
+        case CURLE_OK:
+            break;
+
+        case CURLE_LOGIN_DENIED:
+            logger::error("[MailManager::execute_body] invalid email or password: {}", email.address);
+            return Errors::Mail::Auth;
+
+        default:
+            logger::error("[MailManager::execute_body] error CURL: {}", curl_easy_strerror(res));
+            return Errors::Mail::Internal;
+    }
+
+    std::string sender;
+    std::string dt;
+    std::string title;
+    std::string body;
+
+    extract_text_gmime(response, sender, dt, title, body);
+    response = std::format("{}\n{}\n{}\n{}", sender, dt, title, body);
+
+    return Errors::Mail::OK;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+void MailRequest::extract_text_gmime(const std::string& raw_email, std::string& sender, std::string& dt, std::string& title, std::string& body) const {
+
+    g_mime_init();
+
+    GMimeStream* stream = g_mime_stream_mem_new_with_buffer(raw_email.c_str(), raw_email.length());
+    GMimeParser* parser = g_mime_parser_new_with_stream(stream);
+
+    GMimeMessage* message = g_mime_parser_construct_message(parser, nullptr);
+
+    InternetAddressList* from_list = g_mime_message_get_from(message);
+    if (from_list && internet_address_list_length(from_list) > 0) {
+        InternetAddress* addr = internet_address_list_get_address(from_list, 0);
+        const char*      name = internet_address_get_name(addr); // Имя (например, "Иван Иванов")
+        if (name)
+            sender = name;
+    }
+
+    const char* subject = g_mime_message_get_subject(message);
+    if (subject) {
+        title = subject;
+    }
+
+    GDateTime* date = g_mime_message_get_date(message);
+    if (date) {
+        char* date_str = g_date_time_format(date, "%Y-%m-%d %H:%M:%S");
+
+        dt = date_str;
+        g_free(date_str);
+    }
+
+    GMimeObject* mime_part = g_mime_message_get_mime_part(message);
+    if (GMIME_IS_TEXT_PART(mime_part)) {
+        char* text = g_mime_text_part_get_text((GMimeTextPart*) mime_part);
+        if (text) {
+            body = text;
+            g_free(text);
+        }
+    } else if (GMIME_IS_MULTIPART(mime_part)) {
+        GMimeMultipart* multipart = (GMimeMultipart*) mime_part;
+
+        int count = g_mime_multipart_get_count(multipart);
+        for (int i = 0; i < count; i++) {
+            GMimeObject* part = g_mime_multipart_get_part(multipart, i);
+            if (GMIME_IS_TEXT_PART(part)) {
+                char* text = g_mime_text_part_get_text((GMimeTextPart*) part);
+                if (text) {
+                    body = text;
+                    g_free(text);
+                    break;
+                }
+            }
+        }
+    }
+
+    g_object_unref(message);
+    g_object_unref(parser);
+    g_object_unref(stream);
+    g_mime_shutdown();
 }
 //----------------------------------------------------------------------------------------------------------------------

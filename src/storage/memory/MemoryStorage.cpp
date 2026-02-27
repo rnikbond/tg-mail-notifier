@@ -54,6 +54,6 @@ std::vector<int64_t> MemoryStorage::chat_ids() const noexcept {
         ids.push_back(chat_id);
     }
 
-    return {};
+    return ids;
 }
 //----------------------------------------------------------------------------------------------------------------------

@@ -47,6 +47,7 @@ target_link_libraries(unit_tests PRIVATE
     spdlog::spdlog
     nlohmann_json::nlohmann_json
     CURL::libcurl
+    ${GMIME_LIBRARIES}
 )
 
 enable_testing()

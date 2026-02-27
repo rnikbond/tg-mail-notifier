@@ -132,7 +132,7 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
         throw;
     }
 
-    logger::debug(body_js.dump(4));
+    //logger::debug(body_js.dump(4));
 
     if (!body_js.contains("result")) {
         throw std::runtime_error("[TelegramController::process] invalid JSON: does not contains 'result'");

@@ -11,6 +11,7 @@
 //----------------------------------------------------------
 using UIDsOpt = std::expected<std::vector<int64_t>, Errors::Mail>;
 using UIDOpt  = std::expected<int64_t, Errors::Mail>;
+using EmailMsgExp = std::expected<std::string, Errors::Mail>;
 //----------------------------------------------------------
 
 class IMailRequest {
@@ -33,6 +34,14 @@ public:
      * @return Последний UID или ошибку
      */
     [[nodiscard]] virtual UIDOpt last_uid(const Email& email) const noexcept = 0;
+
+    /**
+     * @brief Загрузка письма электронной почты
+     * @param email Структура для выполнения запроса
+     * @param uid   Идентификатор письма, которое нужно загрузить
+     * @return Данные письма или ошибку
+     */
+    [[nodiscard]] virtual EmailMsgExp fetch_email(const Email& email, int64_t uid) const noexcept = 0;
 };
 //----------------------------------------------------------------------------------------------------------------------
 #endif // IMAILREQUEST_H

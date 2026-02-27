@@ -29,6 +29,9 @@ public:
     UIDOpt last_uid(const Email& email) const noexcept override {
         return 0;
     }
+    EmailMsgExp fetch_email(const Email& email, int64_t uid) const noexcept override {
+        return "";
+    }
 };
 //----------------------------------------------------------------------------------------------------------------------
 
