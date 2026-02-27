@@ -27,10 +27,11 @@ int main(int argc, char **argv) {
     std::shared_ptr<MailManager>     m_mail_manager;
 
     try {
-        m_storage      = std::make_unique<MemoryStorage>();
-        m_cache        = std::make_shared<Cache>(std::move(m_storage));
+        m_storage = std::make_unique<MemoryStorage>();
+        m_cache   = std::make_shared<Cache>(std::move(m_storage));
+
         m_tg_manager   = std::make_shared<TelegramManager>(cfg.m_tg_token, cfg.m_tg_host_port, m_cache);
-        m_mail_manager = std::make_shared<MailManager>(m_cache);
+        m_mail_manager = std::make_shared<MailManager>(m_cache, cfg.m_tg_token);
 
         m_tg_manager->start();
         m_mail_manager->start();

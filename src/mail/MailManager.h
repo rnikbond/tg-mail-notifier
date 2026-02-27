@@ -13,7 +13,7 @@ class MailManager {
 
 public:
 
-    MailManager(std::shared_ptr<IRepository> repo);
+    MailManager(std::shared_ptr<IRepository> repo, const std::string& tg_token);
 
     void start();
     void stop();
@@ -25,6 +25,7 @@ private:
     std::condition_variable m_cond_wait;
     bool                    m_request_stop = {false};
 
+    std::string                  m_tg_token;
     std::shared_ptr<IRepository> m_repo;
 
 private:

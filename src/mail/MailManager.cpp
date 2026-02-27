@@ -1,6 +1,8 @@
 //----------------------------------------------------------
+#include "nlohmann/json.hpp"
 #include "spdlog/spdlog.h"
 //----------------------------------------------------------
+#include "../src/telegram/TelegramSenderFactory.h"
 #include "MailFactory.h"
 //----------------------------------------------------------
 #include "MailManager.h"
@@ -8,8 +10,9 @@
 namespace logger = spdlog;
 //----------------------------------------------------------
 
-MailManager::MailManager(std::shared_ptr<IRepository> repo)
-    : m_repo(repo) {
+MailManager::MailManager(std::shared_ptr<IRepository> repo, const std::string& tg_token)
+    : m_repo(repo)
+    , m_tg_token(tg_token) {
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -72,6 +75,8 @@ void MailManager::scan_emails() {
         return;
     }
 
+    auto tg_sender = TelegramSenderFactory::create();
+
     for (auto& [chat_id, email] : chats_map) {
 
         //: Загрузка UIDs новых писем
@@ -88,7 +93,7 @@ void MailManager::scan_emails() {
 
         //: Проверка, есть ли новые письма
         if (uids.back() == email.last_uid) {
-            logger::warn("[MailManager::scan_emails] last uid is equal to the last processed. email: {}", email.address);
+            //logger::warn("[MailManager::scan_emails] last uid is equal to the last processed. email: {}", email.address);
             continue;
         }
 
@@ -105,7 +110,21 @@ void MailManager::scan_emails() {
                 continue;
             }
 
-            logger::info("[MailManager::scan_emails] loaded new messade. email: {}, UID: {}\n{}", email.address, uid, msg_opt.value());
+            logger::info("[MailManager::scan_emails] loaded new message. email: {}, UID: {}\n{}", email.address, uid, msg_opt.value());
+
+            json js_body;
+            js_body["chat_id"]    = chat_id;
+            js_body["text"]       = std::move(msg_opt.value());
+            js_body["parse_mode"] = "HTML";
+
+            constexpr std::string_view url = "/bot{}/sendMessage";
+
+            TelegramRequest request;
+            request.url          = std::format(url, m_tg_token);
+            request.body         = js_body.dump();
+            request.content_type = "application/json";
+
+            tg_sender->send_msg(std::move(request));
         }
 
         //: Обновление последнего обработанного сообщения
