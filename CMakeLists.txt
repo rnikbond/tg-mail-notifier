@@ -55,6 +55,7 @@ add_executable(tg-mail-notifier
     ${SOURCES}
     src/telegram/TelegramSender.h src/telegram/TelegramSender.cpp
     src/telegram/TelegramSenderFactory.h src/telegram/TelegramSenderFactory.cpp
+    src/core/logger.h
 )
 
 ## Добавление доп. библиотек

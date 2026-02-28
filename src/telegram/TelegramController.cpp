@@ -2,15 +2,14 @@
 #include <regex>
 //----------------------------------------------------------
 #include "nlohmann/json.hpp"
-#include <spdlog/spdlog.h>
+//----------------------------------------------------------
+#include "../src/core/logger.h"
 //----------------------------------------------------------
 #include "../mail/MailFactory.h"
 #include "../mail/MailRequest.h"
 #include "chat/Chat.h"
 //----------------------------------------------------------
 #include "TelegramController.h"
-//----------------------------------------------------------
-namespace logger = spdlog;
 //----------------------------------------------------------
 
 namespace {
@@ -122,20 +121,20 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
     try {
         body_js = json::parse(response.body);
     } catch (json::parse_error& e) {
-        logger::error("[TelegramController::process] failed parse JSON:\n"
-                      "error: {}\n"
-                      "error id: {}\n,"
-                      "position: {}",
-                      e.what(),
-                      e.id,
-                      e.byte);
+        log_error("failed parse JSON:\n"
+                  "error: {}\n"
+                  "error id: {}\n,"
+                  "position: {}",
+                  e.what(),
+                  e.id,
+                  e.byte);
         throw;
     }
 
-    //logger::debug(body_js.dump(4));
+    //log_debug(body_js.dump(4));
 
     if (!body_js.contains("result")) {
-        throw std::runtime_error("[TelegramController::process] invalid JSON: does not contains 'result'");
+        throw std::runtime_error("invalid JSON: does not contains 'result'");
     }
 
     //: Обрабатывае только последнее сообщение
@@ -145,7 +144,7 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
     }
 
     if (!body_js["result"][idx].contains("update_id")) {
-        throw std::runtime_error("[TelegramController::process] invalid JSON: does not contains 'update_id' in [result][i]");
+        throw std::runtime_error("invalid JSON: does not contains 'update_id' in [result][i]");
     }
 
     int64_t update_id = body_js["result"][idx]["update_id"];
@@ -155,10 +154,6 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
     }
 
     //: Запоминаем идентификатор обработанного сообщения
-    // if (last_msg_id == 0) {
-    //     last_msg_id = update_id;
-    //     return std::nullopt;
-    // }
     last_msg_id = update_id;
 
     int64_t chat_id;
@@ -171,7 +166,7 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
         chat_id = find_chat_id(body_js, idx, "edited_message");
     } else {
         //: непонятно, как обрабатывать
-        logger::warn("[TelegramController::process] unknown JSON: \n{}", body_js.dump(4));
+        log_warn("unknown JSON: \n{}", body_js.dump(4));
         return std::nullopt;
     }
 
@@ -189,6 +184,7 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
 
         if (!chat) {
             chat = register_chat(chat_id, idx, body_js);
+            log_info("register new chat. chat_id: {}, username: {}", chat->chat_id, chat->username);
         }
     }
 
@@ -229,7 +225,7 @@ int64_t TelegramController::find_chat_id(const json& body_js, int idx, const std
 std::shared_ptr<const Chat> TelegramController::register_chat(int64_t chat_id, int idx, const json& body_js) {
 
     if (!body_js["result"][idx]["message"]["chat"].contains("username")) {
-        throw std::runtime_error("[TelegramController::register_chat] invalid JSON: does not contains 'username' in [result][i][message][chat]");
+        throw std::runtime_error("invalid JSON: does not contains 'username' in [result][i][message][chat]");
     }
 
     Chat chat;
@@ -247,7 +243,7 @@ std::shared_ptr<const Chat> TelegramController::register_chat(int64_t chat_id, i
 
     auto res = m_repo->create(chat);
     if (!res.has_value()) {
-        throw std::runtime_error("[TelegramController::register_chat] failed create chat in repository");
+        throw std::runtime_error("failed create chat in repository");
     }
 
     return res.value();
@@ -266,23 +262,23 @@ std::shared_ptr<const Chat> TelegramController::register_chat(int64_t chat_id, i
 RequestOpt TelegramController::handle_reply_on_cmd(const json& body_js, int idx, std::shared_ptr<const Chat> chat) {
 
     if (!body_js["result"][idx]["message"]["reply_to_message"].contains("text")) {
-        throw std::runtime_error("[TelegramController::handle_reply_on_cmd] invalid JSON: does not contains 'text' in [result][i][message][reply_to_message]");
+        throw std::runtime_error("invalid JSON: does not contains 'text' in [result][i][message][reply_to_message]");
     }
 
     if (!body_js["result"][idx]["message"].contains("text")) {
-        throw std::runtime_error("[TelegramController::handle_reply_on_cmd] invalid JSON: does not contains 'text' in [result][i][message]");
+        throw std::runtime_error("invalid JSON: does not contains 'text' in [result][i][message]");
     }
 
     std::string reply_text = body_js["result"][idx]["message"]["reply_to_message"]["text"];
 
     size_t pos = reply_text.find('\n');
     if (pos == std::string::npos) {
-        throw std::runtime_error(std::format("[TelegramController::handle_reply_on_cmd] invalid reply: {}", reply_text));
+        throw std::runtime_error(std::format("invalid reply: {}", reply_text));
     }
 
     std::string command_text = reply_text.substr(0, pos);
     if (!g_commands_map.contains(command_text)) {
-        throw std::runtime_error(std::format("[TelegramController::handle_reply_on_cmd] unknown command: {}", command_text));
+        throw std::runtime_error(std::format("unknown command: {}", command_text));
     }
 
     TelegramRequest request;
@@ -293,7 +289,7 @@ RequestOpt TelegramController::handle_reply_on_cmd(const json& body_js, int idx,
         case Commands::Password:
             return process_cmd_value_password(body_js, idx, chat);
         default:
-            throw std::runtime_error(std::format("[TelegramController::handle_cmd] no case for command: {}", command_text));
+            throw std::runtime_error(std::format("no case for command: {}", command_text));
     }
 
     return std::nullopt;
@@ -310,7 +306,7 @@ RequestOpt TelegramController::handle_reply_on_cmd(const json& body_js, int idx,
 RequestOpt TelegramController::handle_cmd(const json& body_js, int idx, std::shared_ptr<const Chat> chat) {
 
     if (!body_js["result"][idx]["message"].contains("text")) {
-        throw std::runtime_error("[TelegramController::handle_cmd] invalid JSON: does not contains 'text' in [result][i][message]");
+        throw std::runtime_error("invalid JSON: does not contains 'text' in [result][i][message]");
     }
 
     std::string command_text = body_js["result"][idx]["message"]["text"];
@@ -336,8 +332,8 @@ RequestOpt TelegramController::handle_cmd(const json& body_js, int idx, std::sha
         case Commands::ClearEmailAuth:
             return process_cmd_clear_email_auth(chat);
         default:
-            logger::error("[TelegramController::handle_cmd] no case for command: {}", command_text);
-            throw std::runtime_error(std::format("[TelegramController::handle_cmd] no case command: {}", command_text));
+            log_error("no case for command: {}", command_text);
+            throw std::runtime_error(std::format("no case command: {}", command_text));
     }
 
     return std::nullopt;
@@ -371,11 +367,13 @@ TelegramRequest TelegramController::process_cmd_value_email(const json& body_js,
         }
 
         email.last_uid = res.value();
+
+        log_info("email successfully registered: {}, last_uid: {}", email.address, email.last_uid);
     }
 
     bool ok = m_repo->update_email(chat->chat_id, email);
     if (!ok) {
-        throw std::runtime_error(std::format("[TelegramController::process_cmd_value_email] failed update chat. chat id: {}", chat->chat_id));
+        throw std::runtime_error(std::format("failed update chat. chat id: {}", chat->chat_id));
     }
 
     if (!email.address.empty() && !email.password.empty()) {
@@ -408,11 +406,13 @@ TelegramRequest TelegramController::process_cmd_value_password(const json& body_
         }
 
         email.last_uid = res.value();
+
+        log_info("email successfully registered: {}, last_uid: {}", email.address, email.last_uid);
     }
 
     bool ok = m_repo->update_email(chat->chat_id, email);
     if (!ok) {
-        throw std::runtime_error(std::format("[TelegramController::process_cmd_value_password] failed update chat. chat id: {}", chat->chat_id));
+        throw std::runtime_error(std::format("failed update chat. chat id: {}", chat->chat_id));
     }
 
     if (!email.address.empty() && !email.password.empty()) {
@@ -436,7 +436,7 @@ TelegramRequest TelegramController::process_cmd_clear_email_auth(std::shared_ptr
 
     bool ok = m_repo->update_email(chat->chat_id, email);
     if (!ok) {
-        throw std::runtime_error(std::format("[TelegramController::process_cmd_clear_email_auth] failed update email. chat id: {}", chat->chat_id));
+        throw std::runtime_error(std::format("failed update email. chat id: {}", chat->chat_id));
     }
 
     return prepare_request_text(chat, "✅ Удалить email и пароль");
@@ -577,7 +577,7 @@ std::optional<int64_t> TelegramController::check_email_auth(int64_t chat_id, con
         return res.value();
     }
 
-    logger::info("[TelegramController::check_email_auth] failed load last uid: {}", static_cast<int>(res.error()));
+    log_info("failed load last uid: {}", static_cast<int>(res.error()));
     return std::nullopt;
 }
 //----------------------------------------------------------------------------------------------------------------------

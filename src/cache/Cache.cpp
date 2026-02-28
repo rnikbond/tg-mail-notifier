@@ -1,9 +1,7 @@
 //----------------------------------------------------------
-#include <spdlog/spdlog.h>
+#include "../src/core/logger.h"
 //----------------------------------------------------------
 #include "Cache.h"
-//----------------------------------------------------------
-namespace logger = spdlog;
 //----------------------------------------------------------
 
 /*!
@@ -18,7 +16,7 @@ Cache::Cache(std::unique_ptr<IStorage> storage)
 ChatOpt Cache::create(const Chat& chat) noexcept {
 
     if (chat.chat_id == 0 || chat.username.empty()) {
-        logger::error("[Cache::create] chat not have id or username. chat_id = {}, username = {}", chat.chat_id, chat.username);
+        log_error("chat not have id or username. chat_id = {}, username = {}", chat.chat_id, chat.username);
         return std::nullopt;
     }
 
@@ -27,7 +25,7 @@ ChatOpt Cache::create(const Chat& chat) noexcept {
     try {
         m_storage->create(chat);
     } catch (const std::exception& ex) {
-        logger::error("[Cache::create] failed create in storage: {}. chat_id = {}", ex.what(), chat.chat_id);
+        log_error("failed create in storage: {}. chat_id = {}", ex.what(), chat.chat_id);
         return std::nullopt;
     }
 
@@ -44,7 +42,7 @@ ChatOpt Cache::create(const Chat& chat) noexcept {
 bool Cache::update(const Chat& chat) noexcept {
 
     if (chat.chat_id == 0 || chat.username.empty()) {
-        logger::error("[Cache::update] chat not have id or username. chat_id = {}, username = {}", chat.chat_id, chat.username);
+        log_error("chat not have id or username. chat_id = {}, username = {}", chat.chat_id, chat.username);
         return false;
     }
 
@@ -53,7 +51,7 @@ bool Cache::update(const Chat& chat) noexcept {
     try {
         m_storage->update(chat);
     } catch (const std::exception& ex) {
-        logger::error("[Cache::update] failed update in storage: {}. chat id = {}", ex.what(), chat.chat_id);
+        log_error("failed update in storage: {}. chat id = {}", ex.what(), chat.chat_id);
         return false;
     }
 
@@ -66,7 +64,7 @@ bool Cache::update_email(int64_t chat_id, const Email& email) noexcept {
 
     auto res = find({chat_id});
     if (!res.has_value() || res.value().size() != 1) {
-        logger::error("not found chat: {}", chat_id);
+        log_error("not found chat: {}", chat_id);
         return false;
     }
 
@@ -78,7 +76,7 @@ bool Cache::update_email(int64_t chat_id, const Email& email) noexcept {
     try {
         m_storage->update(chat);
     } catch (const std::exception& ex) {
-        logger::error("[Cache::update_email] failed update in storage: {}. chat id = {}", ex.what(), chat.chat_id);
+        log_error("failed update in storage: {}. chat id = {}", ex.what(), chat.chat_id);
         return false;
     }
 
@@ -117,7 +115,7 @@ ChatsOpt Cache::find(const std::vector<int64_t>& chat_ids) noexcept {
                 chats.push_back(chat_shared);
             }
         } else {
-            logger::error("[Cache::find] not found chats in storage: {}", fmt::join(load_chats_ids, ","));
+            log_error("not found chats in storage: {}", fmt::join(load_chats_ids, ","));
         }
     }
 
@@ -130,7 +128,7 @@ std::unordered_map<int64_t, Email> Cache::chats() noexcept {
     auto chats_ids = m_storage->chat_ids();
     auto res       = find(chats_ids);
     if (!res.has_value()) {
-        logger::error("[Cache::chats] not found chats in: {}", fmt::join(chats_ids, ","));
+        log_error("not found chats in: {}", fmt::join(chats_ids, ","));
         return {};
     }
 

@@ -2,15 +2,13 @@
 #include <iostream>
 #include <memory>
 //----------------------------------------------------------
-#include <spdlog/spdlog.h>
+#include "core/logger.h"
 //----------------------------------------------------------
 #include "cache/Cache.h"
 #include "core/Config.h"
 #include "mail/MailManager.h"
 #include "storage/memory/MemoryStorage.h"
 #include "telegram/TelegramManager.h"
-//----------------------------------------------------------
-namespace logger = spdlog;
 //----------------------------------------------------------
 
 int main(int argc, char **argv) {
@@ -19,7 +17,7 @@ int main(int argc, char **argv) {
     cfg.parse(argc, argv, "tg-mail-notifier.ini");
     cfg.setup_logger();
 
-    logger::info("[main] started");
+    log_info("started");
 
     std::unique_ptr<MemoryStorage>   m_storage;
     std::shared_ptr<Cache>           m_cache;
@@ -37,13 +35,11 @@ int main(int argc, char **argv) {
         m_mail_manager->start();
 
     } catch (const std::exception &ex) {
-        logger::error("error starting: {}", ex.what());
+        log_error("error starting: {}", ex.what());
     }
 
     std::string command;
-    std::cout << "Введите 'stop' для завершения: " << std::endl;
     while (true) {
-        std::cout << "> ";
         std::cin >> command;
 
         if (command == "stop") {
@@ -58,7 +54,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    logger::info("[main] stopped");
+    log_info("stopped");
     return 0;
 }
 //----------------------------------------------------------------------------------------------------------------------

@@ -1,11 +1,12 @@
 //----------------------------------------------------------
+#include <regex>
+//----------------------------------------------------------
 #include <curl/curl.h>
 #include <gmime/gmime.h>
-#include <spdlog/spdlog.h>
+//----------------------------------------------------------
+#include "../src/core/logger.h"
 //----------------------------------------------------------
 #include "MailRequest.h"
-//----------------------------------------------------------
-namespace logger = spdlog;
 //----------------------------------------------------------
 
 // Callback для записи данных в строку
@@ -18,7 +19,7 @@ size_t write_callback_response(void* contents, size_t size, size_t nmemb, std::s
 
 UIDsOpt MailRequest::load_uids(const Email& email) const noexcept {
 
-    std::string request = std::format("UID FETCH {}:* (FLAGS)", email.last_uid + 1);
+    std::string request = std::format("UID FETCH {}:* (FLAGS)", email.last_uid);
     std::string response;
 
     auto err = execute(email, request, response);
@@ -97,7 +98,7 @@ Errors::Mail MailRequest::execute(const Email& email, const std::string& request
 
     std::unique_ptr<CURL, decltype(deleter)> curl(curl_easy_init(), deleter);
     if (!curl) {
-        logger::error("[MailManager::execute] failed create CURL");
+        log_error("failed create CURL");
         return Errors::Mail::Internal;
     }
 
@@ -116,11 +117,11 @@ Errors::Mail MailRequest::execute(const Email& email, const std::string& request
             return Errors::Mail::OK;
 
         case CURLE_LOGIN_DENIED:
-            logger::error("[MailManager::execute] invalid email or password: {}", email.address);
+            log_error("invalid email or password: {}", email.address);
             return Errors::Mail::Auth;
 
         default:
-            logger::error("[MailManager::execute] error CURL: {}", curl_easy_strerror(res));
+            log_error("error CURL: {}", curl_easy_strerror(res));
             return Errors::Mail::Internal;
     }
 }
@@ -132,7 +133,7 @@ Errors::Mail MailRequest::execute_body(const Email& email, const std::string& ur
 
     std::unique_ptr<CURL, decltype(deleter)> curl(curl_easy_init(), deleter);
     if (!curl) {
-        logger::error("[MailManager::execute_body] failed create CURL");
+        log_error("failed create CURL");
         return Errors::Mail::Internal;
     }
 
@@ -152,11 +153,11 @@ Errors::Mail MailRequest::execute_body(const Email& email, const std::string& ur
             break;
 
         case CURLE_LOGIN_DENIED:
-            logger::error("[MailManager::execute_body] invalid email or password: {}", email.address);
+            log_error("invalid email or password: {}", email.address);
             return Errors::Mail::Auth;
 
         default:
-            logger::error("[MailManager::execute_body] error CURL: {}", curl_easy_strerror(res));
+            log_error("error CURL: {}", curl_easy_strerror(res));
             return Errors::Mail::Internal;
     }
 
@@ -165,8 +166,35 @@ Errors::Mail MailRequest::execute_body(const Email& email, const std::string& ur
     std::string title;
     std::string body;
 
+    auto stripHTML = [](std::string html) {
+        // 1. Удаляем содержимое тегов <script> и <style> полностью
+        html = std::regex_replace(html, std::regex("<(script|style)[^>]*>[\\s\\S]*?<\\/\\1>"), "");
+
+        // 2. Удаляем все остальные теги
+        html = std::regex_replace(html, std::regex("<[^>]*>"), " ");
+
+        // 3. Заменяем HTML-сущности (базово)
+        html = std::regex_replace(html, std::regex("&nbsp;"), " ");
+        html = std::regex_replace(html, std::regex("&lt;"), "<");
+        html = std::regex_replace(html, std::regex("&gt;"), ">");
+        html = std::regex_replace(html, std::regex("&amp;"), "&");
+
+        // 4. Убираем лишние пробелы и переносы
+        html = std::regex_replace(html, std::regex("\\s{2,}"), " ");
+
+        return html;
+    };
+
     extract_text_gmime(response, sender, dt, title, body);
+    sender = stripHTML(sender);
+    dt     = stripHTML(dt);
+    title  = stripHTML(title);
+    body   = stripHTML(body);
+
     response = std::format("{}\n{}\n{}\n{}", sender, dt, title, body);
+    if (response.length() > 3500) {
+        response = response.substr(0, 3500);
+    }
 
     return Errors::Mail::OK;
 }

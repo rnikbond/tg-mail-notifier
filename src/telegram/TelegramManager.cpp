@@ -1,9 +1,7 @@
 //----------------------------------------------------------
-#include <spdlog/spdlog.h>
+#include "../src/core/logger.h"
 //----------------------------------------------------------
 #include "TelegramManager.h"
-//----------------------------------------------------------
-namespace logger = spdlog;
 //----------------------------------------------------------
 
 TelegramManager::TelegramManager(const std::string& token, const std::string& host_port, std::shared_ptr<IRepository> repo)
@@ -35,14 +33,14 @@ TelegramManager::~TelegramManager() {
  */
 void TelegramManager::start() {
 
-    logger::info("[TelegramManager::start] start");
+    log_info("start");
 
     { //: Инициализация команд
         auto request  = m_controller->commands();
         auto response = m_http->Post(request->url, request->body, request->content_type);
         if (!response || response->status != httplib::OK_200) {
             auto err = response.error();
-            throw std::runtime_error(std::format("[TelegramManager::start] failed init bot commands: {}, {}", response->status, httplib::to_string(err)));
+            throw std::runtime_error(std::format("failed init bot commands: {}, {}", response->status, httplib::to_string(err)));
         }
     }
 
@@ -56,7 +54,7 @@ void TelegramManager::start() {
  */
 void TelegramManager::stop() noexcept {
 
-    logger::info("[TelegramManager::stop] stopping...");
+    log_info("stopping...");
 
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -68,7 +66,7 @@ void TelegramManager::stop() noexcept {
         m_thread.join();
     }
 
-    logger::info("[TelegramManager::stop] stopped");
+    log_info("stopped");
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -88,7 +86,7 @@ void TelegramManager::run() {
         httplib::Result msg = m_http->Get(url);
         if (!msg) {
             auto err = msg.error();
-            logger::error(std::format("[TelegramManager] http::Get({}) returned error: {}", url, httplib::to_string(err)));
+            log_error(std::format("http::Get({}) returned error: {}", url, httplib::to_string(err)));
             continue;
         }
 
@@ -102,12 +100,12 @@ void TelegramManager::run() {
             }
 
         } catch (const std::exception& ex) {
-            logger::error(std::format("[TelegramManager::run] error process telegram response: {}", ex.what()));
+            log_error(std::format("error process telegram response: {}", ex.what()));
         }
 
         bool is_stop = m_wait_cond.wait_for(lock, std::chrono::seconds(1), [&]() { return m_request_stop; });
         if (is_stop) {
-            logger::info("[TelegramManager::run] request to stop");
+            log_info("request to stop");
             break;
         }
     }

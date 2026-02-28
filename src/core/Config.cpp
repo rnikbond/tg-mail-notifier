@@ -78,7 +78,7 @@ void Config::setup_logger() {
         //: Настраиваем "раковины" (sinks)
         auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
         console_sink->set_level(spdlog::level::trace);
-        console_sink->set_pattern("%^[%Y-%m-%d %H:%M:%S] [%l]%$ %v");
+        console_sink->set_pattern("%^[%Y-%m-%d %H:%M:%S] [%l] [%-14!] %v%$");
 
         //: Файловый логгер: макс 5МБ, храним 3 старых файла
         auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(m_log_path, 1024 * 1024 * 5, 3);
