@@ -29,7 +29,7 @@ set(SRC_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/cache/Cache.h                  ${CMAKE_CURRENT_SOURCE_DIR}/../src/cache/Cache.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/storage/memory/MemoryStorage.h ${CMAKE_CURRENT_SOURCE_DIR}/../src/storage/memory/MemoryStorage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/mail/MailRequest.h             ${CMAKE_CURRENT_SOURCE_DIR}/../src/mail/MailRequest.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/mail/MailFactory.h             ${CMAKE_CURRENT_SOURCE_DIR}/../src/mail/MailFactory.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/mail/MailRequestFactory.h      ${CMAKE_CURRENT_SOURCE_DIR}/../src/mail/MailRequestFactory.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/telegram/TelegramController.h  ${CMAKE_CURRENT_SOURCE_DIR}/../src/telegram/TelegramController.cpp
 )
 

@@ -2,7 +2,7 @@
 #include "logger.h"
 //----------------------------------------------------------
 #include "../src/telegram/TelegramSenderFactory.h"
-#include "MailFactory.h"
+#include "MailRequestFactory.h"
 //----------------------------------------------------------
 #include "MailManager.h"
 //----------------------------------------------------------
@@ -113,7 +113,7 @@ void MailManager::scan_emails() {
 
 std::optional<std::vector<int64_t>> MailManager::load_uids(const Email& email) {
 
-    auto loader = MailFactory::create();
+    auto loader = MailRequestFactory::create();
 
     auto res = loader->load_uids(email);
     if (!res.has_value()) {
@@ -127,7 +127,7 @@ std::optional<std::vector<int64_t>> MailManager::load_uids(const Email& email) {
 
 std::optional<std::string> MailManager::load_email_msg(const Email& email, int64_t uid) {
 
-    auto loader = MailFactory::create();
+    auto loader = MailRequestFactory::create();
 
     auto res = loader->fetch_email(email, uid);
     if (!res.has_value()) {

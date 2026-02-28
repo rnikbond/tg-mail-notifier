@@ -47,7 +47,7 @@ set(SOURCES
     src/telegram/TelegramManager.h       src/telegram/TelegramManager.cpp
     src/mail/MailManager.h               src/mail/MailManager.cpp
     src/mail/MailRequest.h               src/mail/MailRequest.cpp
-    src/mail/MailFactory.h               src/mail/MailFactory.cpp
+    src/mail/MailRequestFactory.h        src/mail/MailRequestFactory.cpp
     src/telegram/TelegramController.h    src/telegram/TelegramController.cpp
     src/telegram/TelegramSender.h        src/telegram/TelegramSender.cpp
     src/telegram/TelegramSenderFactory.h src/telegram/TelegramSenderFactory.cpp

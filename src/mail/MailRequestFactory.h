@@ -1,6 +1,6 @@
 //----------------------------------------------------------
-#ifndef MAILFACTORY_H
-#define MAILFACTORY_H
+#ifndef MAILREQUESTFACTORY_H
+#define MAILREQUESTFACTORY_H
 //----------------------------------------------------------
 #include <functional>
 #include <memory>
@@ -8,15 +8,15 @@
 #include "mail/IMailRequest.h"
 //----------------------------------------------------------
 
-class MailFactory {
+class MailRequestFactory {
 
     using MailObject  = std::unique_ptr<IMailRequest>;
     using MailCreator = std::function<std::unique_ptr<IMailRequest>()>;
 
 public:
 
-    MailFactory()  = default;
-    ~MailFactory() = default;
+    MailRequestFactory()  = default;
+    ~MailRequestFactory() = default;
 
 public:
 
@@ -30,4 +30,4 @@ private:
 };
 //----------------------------------------------------------------------------------------------------------------------
 
-#endif // MAILFACTORY_H
+#endif // MAILREQUESTFACTORY_H

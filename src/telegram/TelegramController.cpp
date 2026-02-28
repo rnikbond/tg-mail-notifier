@@ -5,8 +5,7 @@
 //----------------------------------------------------------
 #include "logger.h"
 //----------------------------------------------------------
-#include "../mail/MailFactory.h"
-#include "../mail/MailRequest.h"
+#include "../mail/MailRequestFactory.h"
 #include "chat/Chat.h"
 //----------------------------------------------------------
 #include "TelegramController.h"
@@ -572,7 +571,7 @@ TelegramRequest TelegramController::prepare_request_json(std::shared_ptr<const C
  */
 std::optional<int64_t> TelegramController::check_email_auth(int64_t chat_id, const Email& email) const noexcept {
 
-    auto res = MailFactory::create()->last_uid(email);
+    auto res = MailRequestFactory::create()->last_uid(email);
     if (res.has_value()) {
         return res.value();
     }

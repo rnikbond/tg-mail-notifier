@@ -6,7 +6,7 @@
 #include "nlohmann/json.hpp"
 //----------------------------------------------------------
 #include "../src/cache/Cache.h"
-#include "../src/mail/MailFactory.h"
+#include "../src/mail/MailRequestFactory.h"
 #include "../src/storage/memory/MemoryStorage.h"
 #include "../src/telegram/TelegramController.h"
 #include "mail/IMailRequest.h"
@@ -39,10 +39,10 @@ class ScopedMailMock {
 public:
 
     ScopedMailMock() {
-        MailFactory::setCreator([]() { return std::make_unique<MockMailRequest>(); });
+        MailRequestFactory::setCreator([]() { return std::make_unique<MockMailRequest>(); });
     }
     ~ScopedMailMock() {
-        MailFactory::resetCreator();
+        MailRequestFactory::resetCreator();
     }
 };
 //----------------------------------------------------------------------------------------------------------------------
