@@ -111,19 +111,26 @@ Errors::Mail MailRequest::execute(const Email& email, const std::string& request
     curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, write_callback_response);
     curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &response);
 
-    CURLcode res = curl_easy_perform(curl.get());
-    switch (res) {
-        case CURLE_OK:
-            return Errors::Mail::OK;
+    //: Иногда CURL возвращает код ошибки 100, но следующий запрос выполняется успешно.
+    //: Делаем 3 попытки, если получаем код ошибки != CURLE_LOGIN_DENIED
+    const int max_retries = 3;
+    for (int attempt = 1; attempt <= max_retries; attempt++) {
+        CURLcode res = curl_easy_perform(curl.get());
+        switch (res) {
+            case CURLE_OK:
+                return Errors::Mail::OK;
 
-        case CURLE_LOGIN_DENIED:
-            log_error("invalid email or password: {}", email.address);
-            return Errors::Mail::Auth;
+            case CURLE_LOGIN_DENIED:
+                log_error("invalid email or password: {}", email.address);
+                return Errors::Mail::Auth;
 
-        default:
-            log_error("error CURL: {}", curl_easy_strerror(res));
-            return Errors::Mail::Internal;
+            default:
+                log_warn("failed load last email UID. attempt {}/{}. email: {}", attempt, max_retries, email.address);
+                break;
+        }
     }
+
+    return Errors::Mail::Internal;
 }
 //----------------------------------------------------------------------------------------------------------------------
 

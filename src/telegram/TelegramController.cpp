@@ -573,10 +573,11 @@ std::optional<int64_t> TelegramController::check_email_auth(int64_t chat_id, con
 
     auto res = MailRequestFactory::create()->last_uid(email);
     if (res.has_value()) {
+        log_info("success load last email UID. email: {}, UID: {}", email.address, res.value());
         return res.value();
     }
 
-    log_info("failed load last uid: {}", static_cast<int>(res.error()));
+    log_warn("failed load last email UID. email: {}, {}", email.address, static_cast<int>(res.error()));
     return std::nullopt;
 }
 //----------------------------------------------------------------------------------------------------------------------
