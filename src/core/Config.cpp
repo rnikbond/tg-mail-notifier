@@ -36,6 +36,7 @@ void Config::parse(int argc, char **argv, const std::string &path) {
     auto tg = app.add_option_group("tg", "Телеграм");
     tg->add_option("--tg-token", m_tg_token, "Токен telegram бот");
     tg->add_option("--tg-host-port", m_tg_host_port, "URL telegram сервера");
+    tg->add_option("--tg-timeout", m_tg_timeout, "Время удержания сессии с telegram");
 
     //: Секция [log]
     auto log = app.add_option_group("log", "Логирование");

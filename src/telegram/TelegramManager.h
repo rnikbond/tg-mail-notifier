@@ -18,16 +18,15 @@ class TelegramManager {
 
 public:
 
-    TelegramManager(const std::string& token, const std::string& host_port, std::shared_ptr<IRepository> repo);
+    TelegramManager(const std::string& host_port, const std::string& token, size_t timeout, std::shared_ptr<IRepository> repo);
     ~TelegramManager();
 
     void start();
     void stop() noexcept;
 
-    void send_msg(const TelegramRequest&& request);
-
 private:
 
+    size_t      m_timeout = {10};
     std::string m_token;
     int64_t     m_last_chat_update_id = {-1};
 
@@ -44,6 +43,7 @@ private:
 private:
 
     void run();
+    void send_msg(const TelegramRequest&& request);
 };
 //----------------------------------------------------------------------------------------------------------------------
 

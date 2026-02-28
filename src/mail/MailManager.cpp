@@ -1,6 +1,4 @@
 //----------------------------------------------------------
-#include "nlohmann/json.hpp"
-//----------------------------------------------------------
 #include "logger.h"
 //----------------------------------------------------------
 #include "../src/telegram/TelegramSenderFactory.h"
@@ -9,9 +7,8 @@
 #include "MailManager.h"
 //----------------------------------------------------------
 
-MailManager::MailManager(std::shared_ptr<IRepository> repo, const std::string& tg_token)
-    : m_repo(repo)
-    , m_tg_token(tg_token) {
+MailManager::MailManager(std::shared_ptr<IRepository> repo)
+    : m_repo(repo) {
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -99,22 +96,8 @@ void MailManager::scan_emails() {
                 continue;
             }
 
-            log_info("loaded new message. email: {}, UID: {}\n{}", email.address, uid, msg_opt.value());
-
-            json js_body;
-            js_body["chat_id"]    = chat_id;
-            js_body["text"]       = std::move(msg_opt.value());
-            js_body["parse_mode"] = "HTML";
-
-            constexpr std::string_view url = "/bot{}/sendMessage";
-
-            TelegramRequest request;
-            request.url          = std::format(url, m_tg_token);
-            request.body         = js_body.dump();
-            request.content_type = "application/json";
-
-            log_info("send email in telegram: {}, tg_chat_id: {}", email.address, chat_id);
-            tg_sender->send_msg(std::move(request));
+            log_info("send loaded email in telegram: {}, tg_chat_id: {}", email.address, chat_id);
+            tg_sender->send_msg(chat_id, std::move(msg_opt.value()));
         }
 
         //: Обновление последнего обработанного сообщения

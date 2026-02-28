@@ -3,6 +3,8 @@
 #define TELEGRAMSENDERFACTORY_H
 //----------------------------------------------------------
 #include <functional>
+#include <memory>
+#include <string>
 //----------------------------------------------------------
 #include "telegram/ITelegramSender.h"
 //----------------------------------------------------------
@@ -23,9 +25,14 @@ public:
     static void replace(SenderBuilder func);
     static void restore();
 
+    static void configure(const std::string& host, const std::string& token);
+
 private:
 
     static SenderBuilder& create_func();
+
+    static std::string m_host;
+    static std::string m_token;
 };
 //----------------------------------------------------------------------------------------------------------------------
 

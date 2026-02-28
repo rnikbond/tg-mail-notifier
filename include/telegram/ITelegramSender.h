@@ -2,7 +2,7 @@
 #ifndef ITELEGRAMSENDER_H
 #define ITELEGRAMSENDER_H
 //----------------------------------------------------------
-#include "TelegramAPI.h"
+#include <string>
 //----------------------------------------------------------
 
 class ITelegramSender {
@@ -17,7 +17,7 @@ public:
      * @param request Данные запроса
      * @return TRUE, если сообщение отправлено. Иначе FALSE.
      */
-    virtual bool send_msg(const TelegramRequest&& request) const noexcept = 0;
+    virtual bool send_msg(int64_t chat_id, const std::string& body) const noexcept = 0;
 };
 //----------------------------------------------------------------------------------------------------------------------
 #endif // ITELEGRAMSENDER_H

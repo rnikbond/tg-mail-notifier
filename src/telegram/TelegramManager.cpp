@@ -4,8 +4,9 @@
 #include "TelegramManager.h"
 //----------------------------------------------------------
 
-TelegramManager::TelegramManager(const std::string& token, const std::string& host_port, std::shared_ptr<IRepository> repo)
+TelegramManager::TelegramManager(const std::string& host_port, const std::string& token, size_t timeout, std::shared_ptr<IRepository> repo)
     : m_token(token)
+    , m_timeout(timeout)
     , m_repo(repo)
     , m_http(std::make_unique<httplib::Client>(host_port))
     , m_controller(std::make_unique<TelegramController>(token, repo)) {
@@ -38,7 +39,11 @@ void TelegramManager::start() {
     { //: Инициализация команд
         auto request  = m_controller->commands();
         auto response = m_http->Post(request->url, request->body, request->content_type);
-        if (!response || response->status != httplib::OK_200) {
+        if (!response) {
+            throw std::runtime_error("failed init bot commands: response is nullptr");
+        }
+
+        if (response->status != httplib::OK_200) {
             auto err = response.error();
             throw std::runtime_error(std::format("failed init bot commands: {}, {}", response->status, httplib::to_string(err)));
         }
@@ -75,14 +80,14 @@ void TelegramManager::stop() noexcept {
  */
 void TelegramManager::run() {
 
-    constexpr std::string_view url_template = "/bot{}/getUpdates?offset={}&timeout=10";
+    constexpr std::string_view url_template = "/bot{}/getUpdates?offset={}&timeout={}";
 
     while (true) {
 
         std::unique_lock<std::mutex> lock(m_mutex);
 
         int64_t         upd_id = (m_last_chat_update_id == -1) ? -1 : m_last_chat_update_id + 1;
-        std::string     url    = std::format(url_template, m_token, upd_id);
+        std::string     url    = std::format(url_template, m_token, upd_id, m_timeout);
         httplib::Result msg = m_http->Get(url);
         if (!msg) {
             auto err = msg.error();
