@@ -34,14 +34,20 @@ bool TelegramSender::send_msg(int64_t chat_id, const std::string &body) const no
 
     std::unique_ptr<httplib::Client> http = std::make_unique<httplib::Client>(m_host);
 
-    auto res = http->Post(std::format(url, m_token), js_body.dump(), "application/json");
-    if (!res) {
+    //: Иногда почему-то сообщение не отправляется в telegram с 1-го раза.
+    //: Делаем 3 попытки
+    const int max_retries = 3;
+    for (int attempt = 1; attempt <= max_retries; attempt++) {
+        auto res = http->Post(std::format(url, m_token), js_body.dump(), "application/json");
+        if (res) {
+            log_info("message was sent successfully in telegram. chat_id: {}", chat_id);
+            return true;
+        }
+
         auto err = res.error();
-        log_error("error send msg in telegram: {}", httplib::to_string(err));
-        return false;
+        log_warn("failed send msg in telegram. chat_id: {}, attempt {}/{}. {}", attempt, max_retries, chat_id, httplib::to_string(err));
     }
 
-    log_info("message was sent successfully");
-    return true;
+    return false;
 }
 //----------------------------------------------------------------------------------------------------------------------
