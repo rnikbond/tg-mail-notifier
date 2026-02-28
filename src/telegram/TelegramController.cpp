@@ -3,7 +3,7 @@
 //----------------------------------------------------------
 #include "nlohmann/json.hpp"
 //----------------------------------------------------------
-#include "../src/core/logger.h"
+#include "logger.h"
 //----------------------------------------------------------
 #include "../mail/MailFactory.h"
 #include "../mail/MailRequest.h"

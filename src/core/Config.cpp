@@ -68,6 +68,8 @@ void Config::parse(int argc, char **argv, const std::string &path) {
  */
 void Config::setup_logger() {
 
+    const char *log_pattern = "%^%Y-%m-%d %H:%M:%S.%e|%-6l|th:%t|%-25s|%-25! | %v%$";
+
     try {
         //: Создание папки для логов, если её нет
         std::filesystem::path log_file(m_log_path);
@@ -78,18 +80,20 @@ void Config::setup_logger() {
         //: Настраиваем "раковины" (sinks)
         auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
         console_sink->set_level(spdlog::level::trace);
-        console_sink->set_pattern("%^[%Y-%m-%d %H:%M:%S] [%l] [%-14!] %v%$");
+        console_sink->set_pattern(log_pattern);
 
         //: Файловый логгер: макс 5МБ, храним 3 старых файла
         auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(m_log_path, 1024 * 1024 * 5, 3);
         file_sink->set_level(spdlog::level::from_str(m_log_level));
+        file_sink->set_pattern(log_pattern);
 
         //: Собираем логгер из двух sink‑ов
         std::vector<spdlog::sink_ptr> sinks{console_sink, file_sink};
 
         //: Глобальная настройка логера
-        auto logger = std::make_shared<spdlog::logger>("multi_logger", sinks.begin(), sinks.end());
+        auto logger = std::make_shared<spdlog::logger>("global_logger", sinks.begin(), sinks.end());
         logger->set_level(spdlog::level::debug);
+        logger->set_pattern(log_pattern);
 
         spdlog::set_default_logger(logger);
         spdlog::set_level(spdlog::level::trace);
