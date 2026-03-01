@@ -69,7 +69,7 @@ void Config::parse(int argc, char **argv, const std::string &path) {
  */
 void Config::setup_logger() {
 
-    const char *log_pattern = "%^%Y-%m-%d %H:%M:%S.%e|%-6l|th:%t|%-25s|%-25! | %v%$";
+    const char *log_pattern = "%^%Y-%m-%d %H:%M:%S.%e|%-7l|th:%t|%-25s|%-26!| %v%$";
 
     try {
         //: Создание папки для логов, если её нет

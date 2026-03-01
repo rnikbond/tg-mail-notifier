@@ -111,6 +111,8 @@ Errors::Mail MailRequest::execute(const Email& email, const std::string& request
     curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, write_callback_response);
     curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &response);
 
+    //curl_easy_setopt(curl.get(), CURLOPT_VERBOSE, 1L);
+
     //: Иногда CURL возвращает код ошибки 100, но следующий запрос выполняется успешно.
     //: Делаем 3 попытки, если получаем код ошибки != CURLE_LOGIN_DENIED
     const int max_retries = 3;
@@ -126,6 +128,7 @@ Errors::Mail MailRequest::execute(const Email& email, const std::string& request
 
             default:
                 log_warn("failed load last email UID. attempt {}/{}. email: {}", attempt, max_retries, email.address);
+                curl_easy_setopt(curl.get(), CURLOPT_VERBOSE, 1L);
                 break;
         }
     }
