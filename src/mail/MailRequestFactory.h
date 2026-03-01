@@ -8,15 +8,20 @@
 #include "mail/IMailRequest.h"
 //----------------------------------------------------------
 
+/**
+ * @brief Класс-фабрика для создания объектов для выполнения запросов к серверу электронной почты
+ */
 class MailRequestFactory {
-
-    using MailObject  = std::unique_ptr<IMailRequest>;
-    using MailCreator = std::function<std::unique_ptr<IMailRequest>()>;
 
 public:
 
     MailRequestFactory()  = default;
     ~MailRequestFactory() = default;
+
+public:
+
+    using MailObject  = std::unique_ptr<IMailRequest>;
+    using MailCreator = std::function<std::unique_ptr<IMailRequest>()>;
 
 public:
 
@@ -26,6 +31,7 @@ public:
 
 private:
 
+    static MailCreator default_func;
     static MailCreator& create_func();
 };
 //----------------------------------------------------------------------------------------------------------------------

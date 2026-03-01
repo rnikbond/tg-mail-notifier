@@ -1,5 +1,6 @@
 //----------------------------------------------------------
 #include "logger.h"
+#include <ranges>
 //----------------------------------------------------------
 #include "../src/telegram/TelegramSenderFactory.h"
 #include "MailRequestFactory.h"
@@ -7,11 +8,18 @@
 #include "MailManager.h"
 //----------------------------------------------------------
 
+/**
+ * @brief Конструктор менеджера электронной почты
+ * @param repo Указатель на репозиторий
+ */
 MailManager::MailManager(std::shared_ptr<IRepository> repo)
     : m_repo(repo) {
 }
 //----------------------------------------------------------------------------------------------------------------------
 
+/**
+ * @brief Запуск менеджера электронной почты
+ */
 void MailManager::start() {
 
     log_info("start");
@@ -21,6 +29,9 @@ void MailManager::start() {
 }
 //----------------------------------------------------------------------------------------------------------------------
 
+/**
+ * @brief Остановка работы менеджера электронной почты
+ */
 void MailManager::stop() {
 
     log_info("stopping...");
@@ -39,6 +50,9 @@ void MailManager::stop() {
 }
 //----------------------------------------------------------------------------------------------------------------------
 
+/**
+ * @brief Основной цикл работы менеджера электронной почты
+ */
 void MailManager::run() {
 
     while (true) {
@@ -56,85 +70,80 @@ void MailManager::run() {
 }
 //----------------------------------------------------------------------------------------------------------------------
 
+/**
+ * @brief Сканирование новых писем
+ */
 void MailManager::scan_emails() {
 
-    auto chats_map = m_repo->chats();
+    auto chats = m_repo->chats();
 
-    //: Удаление чатов, в которых не настроена почта
-    std::erase_if(chats_map, [](const std::pair<int64_t, Email>& item) {
-        const auto& [chat_id, email] = item;
-        return email.address.empty() || email.password.empty() || email.last_uid < 0;
-    });
-
-    if (chats_map.empty()) {
-        log_info("emails list is empty");
+    if (chats.empty()) {
+        log_info("chats list is empty");
         return;
     }
 
-    auto tg_sender = TelegramSenderFactory::create();
+    auto tg_sender   = TelegramSenderFactory::create();
+    auto mail_loader = MailRequestFactory::create();
 
-    for (auto& [chat_id, email] : chats_map) {
+    for (auto& chat : chats) {
+        for (const Email& email : chat->emails | std::views::values) {
 
-        //: Загрузка UIDs новых писем
-        auto uids_opt = load_uids(email);
-        if (!uids_opt.has_value()) {
-            continue;
-        }
-
-        std::vector<int64_t> uids = std::move(uids_opt.value());
-        //: Если среди загруженных появились UID, которые меньше последнего загруженного - удаляем
-        std::erase_if(uids, [uid_now = email.last_uid](int64_t uid) { return uid <= uid_now; });
-        if (uids.empty()) {
-            log_info("no new email messages. email: {}, last UID: {}", email.address, email.last_uid);
-            continue;
-        }
-
-        //: Загрузка сообщений по новым UIDs
-        for (int64_t uid : uids) {
-            auto msg_opt = load_email_msg(email, uid);
-            if (!msg_opt.has_value()) {
+            if (!email.ok()) {
+                log_info("mail is not ready for scan. chat_id={}, email={}, last_UID={}", chat->chat_id, email.address, email.last_uid);
                 continue;
             }
 
-            log_info("send loaded email in telegram: {}, tg_chat_id: {}", email.address, chat_id);
-            tg_sender->send_msg(chat_id, std::move(msg_opt.value()));
+            //: Загрузка UIDs новых писем
+            auto uids_res = mail_loader->load_uids(email);
+            if (!uids_res.has_value()) {
+                log_error("failed load new mail UIDs. chat_id={}, email={}, last_UID={}, error: ",
+                          chat->chat_id,
+                          email.address,
+                          email.last_uid,
+                          Errors::to_string(uids_res.error()));
+                continue;
+            }
+
+            std::vector<int64_t> uids = std::move(uids_res.value());
+            //: Если среди загруженных появились UID, которые меньше последнего загруженного - удаляем
+            std::erase_if(uids, [uid_now = email.last_uid](int64_t uid) { return uid <= uid_now; });
+
+            if (uids.empty()) {
+                log_info("no new mail msg on the email. chat_id={}, email={}, last_UID={}", chat->chat_id, email.address, email.last_uid);
+                continue;
+            }
+
+            //: Загрузка сообщений по новым UIDs и отправка их в telegram
+            int64_t last_uid = email.last_uid;
+            for (int64_t uid : uids) {
+
+                auto msg_res = mail_loader->fetch_email(email, uid);
+                if (!msg_res.has_value()) {
+                    log_error("failed fetch mail msg. chat_id={}, email={}, UID={}, error: ",
+                              chat->chat_id,
+                              email.address,
+                              uid,
+                              Errors::to_string(msg_res.error()));
+                    continue;
+                }
+
+                log_info("send mail msg in telegram. chat_id:={}, email={}, UID={}", chat->chat_id, email.address, uid);
+
+                tg_sender->send_msg(chat->chat_id, std::move(msg_res.value()));
+                last_uid = uid;
+            }
+
+            if (last_uid <= email.last_uid) {
+                continue;
+            }
+
+            auto res = m_repo->update_email_uid(chat->chat_id, email.id, last_uid);
+            if (res.has_value()) {
+                log_info("last mail uid success updated. chat_id:={}, email={}, last_UID={}", chat->chat_id, email.address, last_uid);
+            } else {
+                log_error("failed update email last uid. chat_id:={}, email={}, error: {}", chat->chat_id, email.address, Errors::to_string(res.error()));
+            }
         }
-
-        //: Обновление последнего обработанного сообщения
-        email.last_uid = uids.back();
-        if (!m_repo->update_email(chat_id, email)) {
-            log_error("failed update last UID in repository. email: {}, uid: {}", email.address, email.last_uid);
-        } else {
-            log_info("last UID updated in repository. email: {}, uid: {}", email.address, email.last_uid);
-        }
     }
-}
-//----------------------------------------------------------------------------------------------------------------------
-
-std::optional<std::vector<int64_t>> MailManager::load_uids(const Email& email) {
-
-    auto loader = MailRequestFactory::create();
-
-    auto res = loader->load_uids(email);
-    if (!res.has_value()) {
-        log_error("failed load uids. email: {}, last_uid: {}, error: {}", email.address, email.last_uid, static_cast<int>(res.error()));
-        return std::nullopt;
-    }
-
-    return res.value();
-}
-//----------------------------------------------------------------------------------------------------------------------
-
-std::optional<std::string> MailManager::load_email_msg(const Email& email, int64_t uid) {
-
-    auto loader = MailRequestFactory::create();
-
-    auto res = loader->fetch_email(email, uid);
-    if (!res.has_value()) {
-        log_error("failed load msg. email: {}, uid: {}, error: {}", email.address, uid, static_cast<int>(res.error()));
-        return std::nullopt;
-    }
-
-    return res.value();
 }
 //----------------------------------------------------------------------------------------------------------------------

@@ -12,33 +12,51 @@ MemoryStorage::MemoryStorage() {
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-void MemoryStorage::create(const Chat& chat) {
+/**
+ * @brief Создание нового чата
+ * @param chat Данные чата
+ * 
+ * @throw std::logic_error Выбарсывается, если chat_id уже существует
+ */
+void MemoryStorage::create_chat(const Chat& chat) {
 
     if (m_data.contains(chat.chat_id)) {
-        throw std::runtime_error(std::format("chat already exists. chat id: {}", chat.chat_id));
+        throw std::logic_error(std::format("chat already exists. chat_id: {}", chat.chat_id));
     }
 
     m_data[chat.chat_id] = chat;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-void MemoryStorage::update(const Chat& chat) {
+/**
+ * @brief Поиск чата по идентификатору
+ * @param chat_id Идентификатор чата
+ * @return Данные чата, если он анйден. Иначе std::nullopt.
+ */
+std::optional<Chat> MemoryStorage::find_chat(int64_t chat_id) const noexcept {
 
-    if (!m_data.contains(chat.chat_id)) {
-        throw std::runtime_error(std::format("chat not found. chat id: {}", chat.chat_id));
+    if (auto it = m_data.find(chat_id); it != m_data.end()) {
+        return it->second;
     }
 
-    m_data[chat.chat_id] = chat;
+    return std::nullopt;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-std::optional<std::vector<Chat>> MemoryStorage::find(const std::vector<int64_t>& chat_ids) const noexcept {
+/*!
+ * @brief Поиск чатов по идентификаторам
+ * @param chat_ids Идентификаторы чатов
+ * @return Список найденных чатов
+ * 
+ * Возвращаются только найденные чаты.
+ * Если какой-либо из чатов не найден, он будет проигнорирован.
+ */
+std::vector<Chat> MemoryStorage::find_chats(const std::vector<int64_t>& chat_ids) const noexcept {
 
     std::vector<Chat> chats;
-
     for (int64_t chat_id : chat_ids) {
-        if (m_data.contains(chat_id)) {
-            chats.push_back(m_data.at(chat_id));
+        if (auto it = m_data.find(chat_id); it != m_data.end()) {
+            chats.push_back(it->second);
         }
     }
 
@@ -46,14 +64,93 @@ std::optional<std::vector<Chat>> MemoryStorage::find(const std::vector<int64_t>&
 }
 //----------------------------------------------------------------------------------------------------------------------
 
+/*!
+ * @brief Получение всех существующих идентификаторов чатов
+ * @return Список существующих идентификаторов чатов
+ */
 std::vector<int64_t> MemoryStorage::chat_ids() const noexcept {
 
     std::vector<int64_t> ids;
-
     for (int64_t chat_id : m_data | std::views::keys) {
         ids.push_back(chat_id);
     }
 
     return ids;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/*!
+ * @brief Добавление электронной почты к чату
+ * @param chat_id Идентификатор чата
+ * @param email   Данные электронной почты
+ * 
+ * @throw std::logic_error  Выбрасывается, если email.id != -1 или если такое email.address уже добавлен к этому чату
+ * @throw std::out_of_range Выбрасывается, если chat_it не найден
+ */
+void MemoryStorage::append_email(int64_t chat_id, const Email& email) {
+
+    if (email.id >= 0) {
+        throw std::logic_error(std::format("failed create email: Email::id must been = -1"));
+    }
+
+    auto it = m_data.find(chat_id);
+    if (it == m_data.end()) {
+        throw std::out_of_range(std::format("not found chat. chat_id: {}", chat_id));
+    }
+
+    auto& emails = it->second.emails;
+
+    int64_t id_autoincrement = emails.size();
+
+    emails[id_autoincrement]    = email;
+    emails[id_autoincrement].id = id_autoincrement;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/*!
+ * @brief Обновление информации об электронной почте
+ * @param chat_id Идентификатор чата
+ * @param email   Данные электронной почты
+ * 
+ * @throw std::out_of_range Выбрасывается, если не найден chat_id или email.id.
+ */
+void MemoryStorage::update_email(int64_t chat_id, const Email& email) {
+
+    auto it = m_data.find(chat_id);
+    if (it == m_data.end()) {
+        throw std::out_of_range(std::format("chat not found. chat_id: {}", chat_id));
+    }
+
+    auto& emails = it->second.emails;
+
+    auto it_email = emails.find(email.id);
+    if (it_email == emails.end()) {
+        throw std::out_of_range(std::format("email not found. email.id: {}", email.id));
+    }
+
+    it_email->second = email;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+* @brief Удаление данных об электронной почте
+* @param chat_id  Идентификатор чата
+* @param email_id Идентификатор электронной почты
+* 
+* @throw std::out_of_range Выбрасывается, если не найден chat_id или email.id.
+*/
+void MemoryStorage::delete_email(int64_t chat_id, int64_t id) {
+
+    auto it = m_data.find(chat_id);
+    if (it == m_data.end()) {
+        throw std::out_of_range(std::format("chat not found. chat_id: {}", chat_id));
+    }
+
+    auto& emails = it->second.emails;
+    if (!emails.contains(id)) {
+        throw std::runtime_error(std::format("email not found. chat_id: {}, id: {}", chat_id, id));
+    }
+
+    emails.erase(id);
 }
 //----------------------------------------------------------------------------------------------------------------------

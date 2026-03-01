@@ -2,13 +2,11 @@
 #ifndef IREPOSITORY_H
 #define IREPOSITORY_H
 //----------------------------------------------------------
+#include <expected>
 #include <memory>
-#include <unordered_map>
 //----------------------------------------------------------
 #include "chat/Chat.h"
-//----------------------------------------------------------
-using ChatOpt  = std::optional<std::shared_ptr<const Chat>>;
-using ChatsOpt = std::optional<std::vector<std::shared_ptr<const Chat>>>;
+#include "errs/Errors.h"
 //----------------------------------------------------------
 
 /**
@@ -25,40 +23,73 @@ public:
 
 public:
 
+    using ChatResult  = std::expected<std::shared_ptr<const Chat>, Errors::Repository>;
+    using ChatsResult = std::optional<std::vector<std::shared_ptr<const Chat>>>;
+    using Chats       = std::vector<std::shared_ptr<const Chat>>;
+
+public:
+
     /**
      * @brief Создание нового чата
      * @param chat Данные нового чата
-     * @return Указатель на созданный чат или nullopt, если пошло что-то не так
+     * @return Указатель на созданный чат или ошибку, если не удалось создать
      */
-    [[nodiscard]] virtual ChatOpt create(const Chat& chat) noexcept = 0;
-
-    /**
-     * @brief Обновление информации о чате
-     * @param chat Обновленные данные чата
-     * @return TRUE, если данные обновлены. Иначе FALSE.
-     */
-    [[nodiscard]] virtual bool update(const Chat& chat) noexcept = 0;
-
-    /**
-     * @brief Обновление информации о Email
-     * @param chat_id Иденитификатор чата
-     * @param email   Обновленные данные email
-     * @return TRUE, если данные обновлены. Иначе FALSE.
-     */
-    [[nodiscard]] virtual bool update_email(int64_t chat_id, const Email& email) noexcept = 0;
+    virtual ChatResult create_chat(const Chat& chat) noexcept = 0;
 
     /**
      * @brief Поиск чата
-     * @param chat_ids Идентификаторы чатов
-     * @return Указатель на чат или nullopt, если он не найден
+     * @param chat_id Идентификатор чата
+     * @return Данные чата, если он найден или ошибку
      */
-    [[nodiscard]] virtual ChatsOpt find(const std::vector<int64_t>& chat_ids) noexcept = 0;
+    [[nodiscard]] virtual ChatResult find_chat(int64_t chat_id) noexcept = 0;
 
     /**
-     * @brief Получение карты чатов и email
-     * @return карта: <chat_id> = Email
+     * @brief Поиск чатов
+     * @param chat_ids Список идентификаторов чатов
+     * @return Найденные чатов или ошибку
+     * 
+     * Если какие-либо чаты не найдены, вернётся список только найденных
      */
-    [[nodiscard]] virtual std::unordered_map<int64_t, Email> chats() noexcept = 0;
+    [[nodiscard]] virtual ChatsResult find_chats(const std::vector<int64_t>& chat_ids) noexcept = 0;
+
+    /**
+     * @brief Получение всех чатов
+     * @return Список всех чатов
+     */
+    [[nodiscard]] virtual Chats chats() noexcept = 0;
+
+    /**
+     * @brief Добавление новой почты
+     * @param chat_id Идентификатор чата
+     * @param email   Данные электронной почты
+     * @return Чат с обновленными данными или ошибку, если не удалось добавить
+     */
+    virtual ChatResult append_email(int64_t chat_id, const Email& email) noexcept = 0;
+
+    /**
+     * @brief Обновление данных о электронной почте
+     * @param chat_id Идентификатор чата
+     * @param email   Данные электронной почты
+     * @return Чат с обновленными данными или ошибку, если не удалось добавить
+     */
+    virtual ChatResult update_email(int64_t chat_id, const Email& email) noexcept = 0;
+
+    /**
+     * @brief Обновление последнего UID письма электронной почты
+     * @param chat_id  Идентификатор чата
+     * @param email_id Идентификатор почты
+     * @param uid      Новый идентификатор письма
+     * @return Чат с обновленными данными или ошибку, если не удалось добавить
+     */
+    virtual ChatResult update_email_uid(int64_t chat_id, int64_t email_id, int64_t uid) noexcept = 0;
+
+    /**
+     * @brief Удаление информации об электронной почте
+     * @param chat_id  Иденитификатор чата
+     * @param email_id Идентификатор электронной почты
+     * @return TRUE, если данные удалены. Иначе FALSE.
+     */
+    virtual bool delete_email(int64_t chat_id, int64_t email_id) noexcept = 0;
 };
 //----------------------------------------------------------------------------------------------------------------------
 

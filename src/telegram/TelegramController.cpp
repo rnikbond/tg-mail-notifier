@@ -37,7 +37,7 @@ const std::unordered_map<std::string, Commands> g_commands_map = {
 };
 //----------------------------------------------------------------------------------------------------------------------
 
-/*!
+/**
  * @brief Поиск текстового значения команды
  * @param cmd Идентификатор команды
  * @return Текстовое занчение команды
@@ -57,12 +57,19 @@ std::string find_command_text(Commands cmd) {
 } // namespace
 //----------------------------------------------------------------------------------------------------------------------
 
+/**
+ * @brief Конструктор контроллера для работы с telegram
+ * @param token Токен бота
+ * @param repo  Указатель на репозиторий
+ * 
+ * @throw std::invalid_argument Выбрасывается, если \a token пуст или \a repo не создан
+ */
 TelegramController::TelegramController(const std::string& token, std::shared_ptr<IRepository> repo)
     : m_repo(repo)
     , m_token(token) {
 
     if (token.empty()) {
-        throw std::runtime_error("telegram token is empty");
+        throw std::invalid_argument("telegram token is empty");
     }
 
     if (!repo) {
@@ -71,7 +78,7 @@ TelegramController::TelegramController(const std::string& token, std::shared_ptr
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-/*!
+/**
  * @brief Получение запроса для отправки команд в telegram бот
  * @return 
  */
@@ -120,17 +127,8 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
     try {
         body_js = json::parse(response.body);
     } catch (json::parse_error& e) {
-        log_error("failed parse JSON:\n"
-                  "error: {}\n"
-                  "error id: {}\n,"
-                  "position: {}",
-                  e.what(),
-                  e.id,
-                  e.byte);
-        throw;
+        throw std::runtime_error(std::format("invalid JSON. error={}, error_id={}, position={}", e.what(), e.id, e.byte));
     }
-
-    //log_debug(body_js.dump(4));
 
     if (!body_js.contains("result")) {
         log_error("invalid JSON: does not contains 'result'\n{}", body_js.dump(4));
@@ -174,18 +172,13 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
     std::shared_ptr<const Chat> chat;
 
     { //: Поиск/регистрация чата
-        auto res = m_repo->find({chat_id});
+        auto chat_res = m_repo->find_chat(chat_id);
 
-        if (res.has_value()) {
-            auto chats_vec = res.value();
-            if (chats_vec.size() > 0) {
-                chat = res.value().at(0);
-            }
-        }
-
-        if (!chat) {
+        if (chat_res.has_value()) {
+            chat = std::move(chat_res.value());
+        } else {
             chat = register_chat(chat_id, idx, body_js);
-            log_info("register new chat. chat_id: {}, username: {}", chat->chat_id, chat->username);
+            log_info("new chat registered. chat_id: {}, username: {}", chat->chat_id, chat->username);
         }
     }
 
@@ -245,7 +238,7 @@ std::shared_ptr<const Chat> TelegramController::register_chat(int64_t chat_id, i
         chat.last_name = body_js["result"][idx]["message"]["chat"]["last_name"];
     }
 
-    auto res = m_repo->create(chat);
+    auto res = m_repo->create_chat(chat);
     if (!res.has_value()) {
         throw std::runtime_error("failed create chat in repository");
     }
@@ -365,7 +358,11 @@ TelegramRequest TelegramController::process_cmd_value_email(const json& body_js,
         return prepare_request_text(chat, "Некорректный Email");
     }
 
-    Email email   = chat->email;
+    Email email;
+    if (!chat->emails.empty()) {
+        email = chat->emails.at(0);
+    }
+
     email.address = value;
     if (!email.address.empty() && !email.password.empty()) {
         auto res = check_email_auth(chat->chat_id, email);
@@ -374,13 +371,19 @@ TelegramRequest TelegramController::process_cmd_value_email(const json& body_js,
         }
 
         email.last_uid = res.value();
-
         log_info("email successfully registered: {}, last_uid: {}", email.address, email.last_uid);
     }
 
-    bool ok = m_repo->update_email(chat->chat_id, email);
-    if (!ok) {
-        throw std::runtime_error(std::format("failed update chat. chat id: {}", chat->chat_id));
+    if (email.id >= 0) {
+        auto res = m_repo->update_email(chat->chat_id, email);
+        if (!res.has_value()) {
+            throw std::runtime_error(std::format("failed crate email address. chat id={}, error: {}", chat->chat_id, Errors::to_string(res.error())));
+        }
+    } else {
+        auto res = m_repo->append_email(chat->chat_id, email);
+        if (!res.has_value()) {
+            throw std::runtime_error(std::format("failed append email address. chat id={}, error: {}", chat->chat_id, Errors::to_string(res.error())));
+        }
     }
 
     //: Отправляем сразу запрос на ввод пароля, если ввели только email
@@ -414,7 +417,11 @@ TelegramRequest TelegramController::process_cmd_value_password(const json& body_
     std::string_view value = text;
     strip_whitespace(value);
 
-    Email email    = chat->email;
+    Email email;
+    if (!chat->emails.empty()) {
+        email = chat->emails.at(0);
+    }
+
     email.password = value;
     if (!email.address.empty() && !email.password.empty()) {
         auto res = check_email_auth(chat->chat_id, email);
@@ -432,9 +439,9 @@ TelegramRequest TelegramController::process_cmd_value_password(const json& body_
         log_info("email successfully registered: {}, last_uid: {}", email.address, email.last_uid);
     }
 
-    bool ok = m_repo->update_email(chat->chat_id, email);
-    if (!ok) {
-        throw std::runtime_error(std::format("failed update chat. chat id: {}", chat->chat_id));
+    auto res = m_repo->update_email(chat->chat_id, email);
+    if (!res.has_value()) {
+        throw std::runtime_error(std::format("failed update email password. chat id={}, error: {}", chat->chat_id, Errors::to_string(res.error())));
     }
 
     if (!email.address.empty() && !email.password.empty()) {
@@ -451,24 +458,21 @@ TelegramRequest TelegramController::process_cmd_value_password(const json& body_
 //----------------------------------------------------------------------------------------------------------------------
 
 /*!
- * @brief Обработка ответа на команду "/password"
+ * @brief Обработка ответа на команду "/clear_email_auth"
  * @param chat Указатель на чат
  * @return 
  */
 TelegramRequest TelegramController::process_cmd_clear_email_auth(std::shared_ptr<const Chat> chat) {
 
-    Email email = chat->email;
-    email.address.clear();
-    email.password.clear();
-    email.last_uid = -1;
-
-    bool ok = m_repo->update_email(chat->chat_id, email);
-    if (!ok) {
-        log_error("failed reset email auth data. email: {}", chat->email.address);
-        throw std::runtime_error(std::format("failed update email. chat id: {}", chat->chat_id));
+    for (int64_t email_id : chat->emails | std::views::keys) {
+        bool ok = m_repo->delete_email(chat->chat_id, email_id);
+        if (!ok) {
+            log_error("failed reset email auth data. email_id: {}", email_id);
+            throw std::runtime_error(std::format("failed update email. chat id: {}", chat->chat_id));
+        }
     }
 
-    log_info("success reset email auth data. email: {}", chat->email.address);
+    log_info("success reset email auth data. chat_id: {}", chat->chat_id);
     return prepare_request_text(chat, "✅ Email и пароль очищены");
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -507,35 +511,20 @@ TelegramRequest TelegramController::prepare_request_about(std::shared_ptr<const 
  */
 TelegramRequest TelegramController::prepare_request_status(std::shared_ptr<const Chat> chat) const noexcept {
 
-    std::string status_email = "❌";
-    if (!chat->email.address.empty()) {
-        status_email = chat->email.address;
-    }
+    std::string status_emails;
 
-    std::string status_psw = "❌";
-    if (!chat->email.password.empty()) {
-        status_psw = "✅";
-    }
-
-    std::string status_scan = "❌";
-    if (!chat->email.address.empty() && !chat->email.password.empty()) {
-        if (chat->email.last_uid >= 0) {
-            status_scan = "✅";
-        } else {
-            status_scan = "❌ неверный логин или пароль";
+    if (chat->emails.empty()) {
+        status_emails = "❌ Почта не указана";
+    } else {
+        for (const Email& email : chat->emails | std::views::values) {
+            status_emails += std::format("📧 Почта: {}, 🔑 Пароль: {}, 👁‍🗨 Статус: {}",
+                                         email.address,
+                                         (email.password.empty() ? "❌" : "✅"),
+                                         email.last_uid >= 0 ? "✅ Сканирование работает" : "❌ Сканирование не работает");
         }
     }
 
-    std::string text = std::format("<pre>"
-                                   "📧 Почта : {}\n"
-                                   "🔑 Пароль: {}\n"
-                                   "\n"
-                                   "👁‍🗨 Сканирование почты: {}\n"
-                                   "</pre>",
-                                   status_email,
-                                   status_psw,
-                                   status_scan);
-
+    std::string text = std::format("<pre>{}</pre>", status_emails);
     return prepare_request_text(chat, text);
 }
 //----------------------------------------------------------------------------------------------------------------------

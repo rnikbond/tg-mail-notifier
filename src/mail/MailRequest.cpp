@@ -10,6 +10,15 @@
 //----------------------------------------------------------
 
 // Callback для записи данных в строку
+
+/**
+ * @brief Callback для CURL, с помощью которой записывается результат запроса
+ * @param[in]  contents Данные
+ * @param[in]  size     Размер данных
+ * @param[in]  nmemb    Количество блоков
+ * @param[out] s       Строка, куда будут записаны данные
+ * @return Размер записанного блока
+ */
 size_t write_callback_response(void* contents, size_t size, size_t nmemb, std::string* s) {
     size_t newLength = size * nmemb;
     s->append((char*) contents, newLength);
@@ -17,12 +26,17 @@ size_t write_callback_response(void* contents, size_t size, size_t nmemb, std::s
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-UIDsOpt MailRequest::load_uids(const Email& email) const noexcept {
+/**
+* @brief Загрузка идентификаторов (UID) новых писем
+* @param email Информация об электронной почте для выполнения запроса
+* @return Отсортированный список идентификаторов новых писем, или ошибку
+*/
+IMailRequest::UIDsResult MailRequest::load_uids(const Email& email) const noexcept {
 
     std::string request = std::format("UID FETCH {}:* (FLAGS)", email.last_uid);
     std::string response;
 
-    auto err = execute(email, request, response);
+    auto err = execute_request(email, request, response);
     if (err != Errors::Mail::OK) {
         return std::unexpected(err);
     }
@@ -48,17 +62,22 @@ UIDsOpt MailRequest::load_uids(const Email& email) const noexcept {
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-UIDOpt MailRequest::last_uid(const Email& email) const noexcept {
+/**
+* @brief Загрузка идентификатора последнего письма
+* @param email Информация об электронной почте для выполнения запроса
+* @return Идентификатор последнего письма или ошибку
+*/
+IMailRequest::UIDResult MailRequest::last_uid(const Email& email) const noexcept {
 
     std::string request = "UID SEARCH ALL";
     std::string response;
 
-    auto err = execute(email, request, response);
+    auto err = execute_request(email, request, response);
     if (err != Errors::Mail::OK) {
         return std::unexpected(err);
     }
 
-    std::vector<int64_t> uids;
+    int64_t uid = -1;
 
     { //: Разбор ответа
         std::string       word;
@@ -66,24 +85,29 @@ UIDOpt MailRequest::last_uid(const Email& email) const noexcept {
 
         while (stream >> word) {
             try {
-                uids.push_back(std::stoi(word));
+                uid = std::stoi(word);
             } catch (...) {
                 continue;
             }
         }
     }
 
-    std::sort(uids.begin(), uids.end());
-    return uids.back();
+    return uid;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-EmailMsgExp MailRequest::fetch_email(const Email& email, int64_t uid) const noexcept {
+/**
+ * @brief Загрузка письма электронной почты
+ * @param email Информация об электронной почте для выполнения запроса
+ * @param uid   Идентификатор письма, которое нужно загрузить
+ * @return Данные письма или ошибку
+ */
+IMailRequest::MailMsgResult MailRequest::fetch_email(const Email& email, int64_t uid) const noexcept {
 
     std::string url = std::format("imaps://imap.yandex.ru/INBOX/;UID={}", uid);
     std::string response;
 
-    auto err = execute_body(email, url, response);
+    auto err = execute_url(email, url, response);
     if (err != Errors::Mail::OK) {
         return std::unexpected(err);
     }
@@ -92,13 +116,20 @@ EmailMsgExp MailRequest::fetch_email(const Email& email, int64_t uid) const noex
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-Errors::Mail MailRequest::execute(const Email& email, const std::string& request, std::string& response) const {
+/*!
+ * @brief Выполнение запроса
+ * @param[in]  email    Информация об электронной почте для выполнения запроса
+ * @param[in]  request  Данные запроса
+ * @param[out] response Данные ответа на запрос
+ * @return Ошибку выполнения запроса
+ */
+Errors::Mail MailRequest::execute_request(const Email& email, const std::string& request, std::string& response) const {
 
     auto deleter = [](CURL* curl) { curl_easy_cleanup(curl); };
 
     std::unique_ptr<CURL, decltype(deleter)> curl(curl_easy_init(), deleter);
     if (!curl) {
-        log_error("failed create CURL");
+        log_error("failed init CURL");
         return Errors::Mail::Internal;
     }
 
@@ -111,8 +142,6 @@ Errors::Mail MailRequest::execute(const Email& email, const std::string& request
     curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, write_callback_response);
     curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &response);
 
-    //curl_easy_setopt(curl.get(), CURLOPT_VERBOSE, 1L);
-
     //: Иногда CURL возвращает код ошибки 100, но следующий запрос выполняется успешно.
     //: Делаем 3 попытки, если получаем код ошибки != CURLE_LOGIN_DENIED
     const int max_retries = 3;
@@ -121,13 +150,16 @@ Errors::Mail MailRequest::execute(const Email& email, const std::string& request
         switch (res) {
             case CURLE_OK:
                 return Errors::Mail::OK;
-
             case CURLE_LOGIN_DENIED:
-                log_error("invalid email or password: {}", email.address);
                 return Errors::Mail::Auth;
-
             default:
-                log_warn("failed load last email UID. attempt {}/{}. email: {}", attempt, max_retries, email.address);
+                log_warn("error CURL. attempt {}/{}. email: {}, error: [{}], {}",
+                         attempt,
+                         max_retries,
+                         email.address,
+                         curl_easy_strerror(res),
+                         static_cast<int>(res));
+                //: Активация детального вывода полсле получения неизвестной ошибки
                 curl_easy_setopt(curl.get(), CURLOPT_VERBOSE, 1L);
                 break;
         }
@@ -137,13 +169,20 @@ Errors::Mail MailRequest::execute(const Email& email, const std::string& request
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-Errors::Mail MailRequest::execute_body(const Email& email, const std::string& url, std::string& response) const {
+/*!
+ * @brief Выполнение запроса по указанному URL
+ * @param[in]  email    Информация об электронной почте для выполнения запроса
+ * @param[in]  url      URL запроса
+ * @param[out] response Данные ответа на запрос
+ * @return Ошибку выполнения запроса
+ */
+Errors::Mail MailRequest::execute_url(const Email& email, const std::string& url, std::string& response) const {
 
     auto deleter = [](CURL* curl) { curl_easy_cleanup(curl); };
 
     std::unique_ptr<CURL, decltype(deleter)> curl(curl_easy_init(), deleter);
     if (!curl) {
-        log_error("failed create CURL");
+        log_error("failed init CURL");
         return Errors::Mail::Internal;
     }
 
@@ -157,18 +196,29 @@ Errors::Mail MailRequest::execute_body(const Email& email, const std::string& ur
     curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, write_callback_response);
     curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &response);
 
-    CURLcode res = curl_easy_perform(curl.get());
-    switch (res) {
-        case CURLE_OK:
-            break;
-
-        case CURLE_LOGIN_DENIED:
-            log_error("invalid email or password: {}", email.address);
-            return Errors::Mail::Auth;
-
-        default:
-            log_error("error CURL: {}", curl_easy_strerror(res));
-            return Errors::Mail::Internal;
+    //: Иногда CURL возвращает код ошибки 100, но следующий запрос выполняется успешно.
+    //: Делаем 3 попытки, если получаем код ошибки != CURLE_LOGIN_DENIED
+    const int max_retries = 3;
+    bool      is_ok       = false;
+    for (int attempt = 1; !is_ok && attempt <= max_retries; attempt++) {
+        CURLcode res = curl_easy_perform(curl.get());
+        switch (res) {
+            case CURLE_OK:
+                is_ok = true;
+                break;
+            case CURLE_LOGIN_DENIED:
+                return Errors::Mail::Auth;
+            default:
+                log_warn("error CURL. attempt {}/{}. email: {}, error: [{}], {}",
+                         attempt,
+                         max_retries,
+                         email.address,
+                         curl_easy_strerror(res),
+                         static_cast<int>(res));
+                //: Активация детального вывода полсле получения неизвестной ошибки
+                curl_easy_setopt(curl.get(), CURLOPT_VERBOSE, 1L);
+                break;
+        }
     }
 
     std::string sender;
@@ -202,14 +252,22 @@ Errors::Mail MailRequest::execute_body(const Email& email, const std::string& ur
     body   = stripHTML(body);
 
     response = std::format("{}\n{}\n{}\n{}", sender, dt, title, body);
-    if (response.length() > 3500) {
-        response = response.substr(0, 3500);
+    if (response.length() > 3072) {
+        response.resize(3072);
     }
 
     return Errors::Mail::OK;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
+/*!
+ * @brief Получение данных письма электронной почты
+ * @param[in]  raw_email Сырые данные письма
+ * @param[out] sender Отправитель
+ * @param[out] dt     Время письма
+ * @param[out] title  Заголовок письма
+ * @param[out] body   Тело письма
+ */
 void MailRequest::extract_text_gmime(const std::string& raw_email, std::string& sender, std::string& dt, std::string& title, std::string& body) const {
 
     g_mime_init();

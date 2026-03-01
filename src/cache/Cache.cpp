@@ -1,10 +1,12 @@
 //----------------------------------------------------------
+#include <ranges>
+//----------------------------------------------------------
 #include "logger.h"
 //----------------------------------------------------------
 #include "Cache.h"
 //----------------------------------------------------------
 
-/*!
+/**
  * @brief Конструктор кэша
  * @param storage Указатель на объект, реализующий интерфейс хранилища
  */
@@ -13,110 +15,112 @@ Cache::Cache(std::unique_ptr<IStorage> storage)
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-ChatOpt Cache::create(const Chat& chat) noexcept {
+/**
+* @brief Создание нового чата
+* @param chat Данные нового чата
+* @return Указатель на созданный чат или ошибку, если не удалось создать
+*/
+IRepository::ChatResult Cache::create_chat(const Chat& chat) noexcept {
 
     if (chat.chat_id == 0 || chat.username.empty()) {
-        log_error("chat not have id or username. chat_id = {}, username = {}", chat.chat_id, chat.username);
-        return std::nullopt;
+        return std::unexpected(Errors::Repository::InvalidChat);
     }
 
     {
         std::shared_lock lock(m_mutex);
-        if (m_data.contains(chat.chat_id)) {
-            log_error("chat already exists. chat_id: {}", chat.chat_id);
-            return std::nullopt;
+        if (m_cache_data.contains(chat.chat_id)) {
+            return std::unexpected(Errors::Repository::AlreadyExists);
         }
     }
 
     std::unique_lock lock(m_mutex);
 
+    //: Создание в хранилище
     try {
-        m_storage->create(chat);
+        m_storage->create_chat(chat);
+    } catch (const std::logic_error& ex) {
+        return std::unexpected(Errors::Repository::AlreadyExists);
+    } catch (const std::exception& ex) {
+        log_error("failed create chat in storage: {}. chat_id = {}", ex.what(), chat.chat_id);
+        return std::unexpected(Errors::Repository::Internal);
+    }
+
+    //: Добавление в кэш
+    try {
         return refresh(chat.chat_id);
     } catch (const std::exception& ex) {
-        log_error("failed create in storage: {}. chat_id = {}", ex.what(), chat.chat_id);
-        return std::nullopt;
+        log_error("failed refresh chat in cache. chat_id = {}, error: {}", chat.chat_id, ex.what());
+        return std::unexpected(Errors::Repository::Internal);
     }
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-bool Cache::update(const Chat& chat) noexcept {
+/**
+* @brief Поиск чата
+* @param chat_id Идентификатор чата
+* @return Данные чата, если он найден или ошибку
+*/
+IRepository::ChatResult Cache::find_chat(int64_t chat_id) noexcept {
 
-    if (chat.chat_id == 0 || chat.username.empty()) {
-        log_error("chat not have id or username. chat_id = {}, username = {}", chat.chat_id, chat.username);
-        return false;
+    { //: Поиск чата в кэше
+        std::shared_lock lock(m_mutex);
+
+        if (auto it = m_cache_data.find(chat_id); it != m_cache_data.end()) {
+            return it->second;
+        }
     }
 
+    //: Раз оказались здесь - значит в кэше чата нет.
+    //: Пробуем загрузить из хранилища
     std::unique_lock lock(m_mutex);
 
-    try {
-        m_storage->update(chat);
-        refresh(chat.chat_id);
-    } catch (const std::exception& ex) {
-        log_error("failed update in storage: {}. chat id = {}", ex.what(), chat.chat_id);
-        return false;
+    auto chat_opt = m_storage->find_chat(chat_id);
+    if (!chat_opt) {
+        return std::unexpected(Errors::Repository::NotFound);
     }
 
-    return true;
+    auto chat = std::make_shared<Chat>(std::move(chat_opt.value()));
+
+    m_cache_data[chat_id] = chat;
+    return chat;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-bool Cache::update_email(int64_t chat_id, const Email& email) noexcept {
-
-    auto res = find({chat_id});
-    if (!res.has_value() || res.value().size() != 1) {
-        log_error("not found chat: {}", chat_id);
-        return false;
-    }
-
-    std::unique_lock lock(m_mutex);
-
-    Chat chat  = *res.value().at(0);
-    chat.email = email;
-
-    try {
-        m_storage->update(chat);
-        refresh(chat.chat_id);
-    } catch (const std::exception& ex) {
-        log_error("failed update in storage: {}. chat id = {}", ex.what(), chat.chat_id);
-        return false;
-    }
-
-    return true;
-}
-//----------------------------------------------------------------------------------------------------------------------
-
-ChatsOpt Cache::find(const std::vector<int64_t>& chat_ids) noexcept {
+/**
+* @brief Поиск чатов
+* @param chat_ids Список идентификаторов чатов
+* @return Найденные чаты
+* 
+* Если какие-либо чаты не найдены, будет обращение к хранилиущ для их поиска.
+* Вернётся только список найденных чатов.
+*/
+IRepository::ChatsResult Cache::find_chats(const std::vector<int64_t>& chat_ids) noexcept {
 
     std::vector<std::shared_ptr<const Chat>> chats;
-    std::vector<int64_t>                     load_chats_ids;
+    chats.reserve(chat_ids.size());
 
-    {
+    std::vector<int64_t> missing_ids;
+
+    { //: Добавление чатов из кэша
         std::shared_lock lock(m_mutex);
 
         for (int64_t chat_id : chat_ids) {
-            if (m_data.contains(chat_id)) {
-                chats.push_back(m_data.at(chat_id));
-            } else {
-                load_chats_ids.push_back(chat_id);
+            if (auto it = m_cache_data.find(chat_id); it != m_cache_data.end()) {
+                chats.push_back(it->second);
+                continue;
             }
+
+            missing_ids.push_back(chat_id);
         }
     }
 
-    if (load_chats_ids.size() != 0) {
-
+    //: Загрузка их хранилища чатов, которых нет в кэше
+    if (missing_ids.size() != 0) {
         std::unique_lock lock(m_mutex);
 
-        auto res = m_storage->find(load_chats_ids);
-        if (res.has_value()) {
-            auto chats_storage = res.value();
-            for (const Chat& chat : chats_storage) {
-                auto chat_shared     = std::make_shared<Chat>(chat);
-                m_data[chat.chat_id] = chat_shared;
-                chats.push_back(chat_shared);
-            }
-        } else {
-            log_error("not found chats in storage: {}", fmt::join(load_chats_ids, ","));
+        auto new_chats = append(missing_ids);
+        for (auto& chat_ptr : new_chats) {
+            chats.push_back(std::move(chat_ptr));
         }
     }
 
@@ -124,37 +128,254 @@ ChatsOpt Cache::find(const std::vector<int64_t>& chat_ids) noexcept {
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-std::unordered_map<int64_t, Email> Cache::chats() noexcept {
+/*!
+ * @brief Получение всех чатов, которые есть в хранилище
+ * @return Список всех чатов
+ */
+IRepository::Chats Cache::chats() noexcept {
 
-    auto chats_ids = m_storage->chat_ids();
-    auto res       = find(chats_ids);
-    if (!res.has_value()) {
-        log_error("not found chats in: {}", fmt::join(chats_ids, ","));
-        return {};
+    std::shared_lock lock(m_mutex);
+
+    std::vector<std::shared_ptr<const Chat>> chats;
+    chats.reserve(m_cache_data.size());
+
+    for (auto& [_, chat_ptr] : m_cache_data) {
+        chats.push_back(chat_ptr);
     }
 
-    std::unordered_map<int64_t, Email> chats_email;
-
-    auto chats_map = res.value();
-    for (const auto& chat : chats_map) {
-        chats_email[chat->chat_id] = chat->email;
-    }
-
-    return chats_email;
+    return chats;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-std::shared_ptr<Chat> Cache::refresh(int64_t chat_id) {
+/**
+* @brief Добавление новой почты
+* @param chat_id Идентификатор чата
+* @param email   Данные электронной почты
+* @return Чат с обновленными данными или ошибку, если не удалось добавить
+*/
+IRepository::ChatResult Cache::append_email(int64_t chat_id, const Email& email) noexcept {
 
-    auto res_final = m_storage->find({chat_id});
-    if (!res_final || res_final.value().size() != 1) {
-        std::string text = std::format("not found chat in storage.chat id = {}", chat_id);
-        log_error(text);
-        throw std::runtime_error(text);
+    std::unique_lock lock(m_mutex);
+
+    auto it = m_cache_data.find(chat_id);
+    if (it == m_cache_data.end()) {
+        it = append(chat_id);
+    }
+    if (it == m_cache_data.end()) {
+        return std::unexpected(Errors::Repository::NotFound);
     }
 
-    auto chat             = std::make_shared<Chat>(std::move(res_final.value().at(0)));
-    m_data[chat->chat_id] = chat;
+    auto& emails = it->second->emails;
+
+    //: Проверка дублирования адресов
+    for (const auto& [id, email_] : emails) {
+        if (email_.address == email.address && email_.id != email.id) {
+            return std::unexpected(Errors::Repository::AlreadyExists);
+        }
+    }
+
+    try {
+        m_storage->append_email(chat_id, email);
+    } catch (const std::out_of_range& ex) {
+        return std::unexpected(Errors::Repository::AlreadyExists);
+    } catch (const std::exception& ex) {
+        log_error("failed append in storage. chat_id: {}, email.id: {}. Error: {}", chat_id, email.id, ex.what());
+        return std::unexpected(Errors::Repository::Internal);
+    }
+
+    try {
+        return refresh(chat_id);
+    } catch (const std::exception& ex) {
+        log_error("failed refresh chat in cache. chat_id: {}. Error: {}", chat_id, ex.what());
+        return std::unexpected(Errors::Repository::Internal);
+    }
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+* @brief Обновление данных о электронной почте
+* @param chat_id Идентификатор чата
+* @param chat_id Данные чата
+* @return Чат с обновленными данными или ошибку, если не удалось добавить
+*/
+IRepository::ChatResult Cache::update_email(int64_t chat_id, const Email& email) noexcept {
+
+    std::unique_lock lock(m_mutex);
+
+    auto it = m_cache_data.find(chat_id);
+    if (it == m_cache_data.end()) {
+        it = append(chat_id);
+    }
+    if (it == m_cache_data.end()) {
+        return std::unexpected(Errors::Repository::NotFound);
+    }
+
+    auto& emails = it->second->emails;
+
+    //: Проверка дублирования адресов
+    for (const auto& [id, email_] : emails) {
+        if (email_.address == email.address && email_.id != email.id) {
+            return std::unexpected(Errors::Repository::AlreadyExists);
+        }
+    }
+
+    try {
+        m_storage->update_email(chat_id, email);
+    } catch (const std::out_of_range& ex) {
+        return std::unexpected(Errors::Repository::NotFound);
+    } catch (const std::exception& ex) {
+        log_error("failed update email in storage. chat_id: {}, email.id: {}. Error: {}", chat_id, email.id, ex.what());
+        return std::unexpected(Errors::Repository::Internal);
+    }
+
+    try {
+        return refresh(chat_id);
+    } catch (const std::exception& ex) {
+        log_error("failed refresh chat in cache. chat_id: {}. Error: {}", chat_id, ex.what());
+        return std::unexpected(Errors::Repository::Internal);
+    }
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+* @brief Обновление последнего UID письма электронной почты
+* @param chat_id  Идентификатор чата
+* @param email_id Идентификатор почты
+* @param uid      Новый идентификатор письма
+* @return Чат с обновленными данными или ошибку, если не удалось добавить
+*/
+IRepository::ChatResult Cache::update_email_uid(int64_t chat_id, int64_t email_id, int64_t uid) noexcept {
+
+    std::unique_lock lock(m_mutex);
+
+    auto it = m_cache_data.find(chat_id);
+    if (it == m_cache_data.end()) {
+        it = append(chat_id);
+    }
+    if (it == m_cache_data.end()) {
+        return std::unexpected(Errors::Repository::NotFound);
+    }
+
+    auto& emails   = it->second->emails;
+    auto  it_email = emails.find(email_id);
+    if (it_email == emails.end()) {
+        return std::unexpected(Errors::Repository::NotFound);
+    }
+
+    auto& email = it_email->second;
+    if (uid <= email.last_uid) {
+        return std::unexpected(Errors::Repository::InvalidUID);
+    }
+
+    if (email.last_uid == uid) {
+        log_warn("request update mail uid on equal. chat_id={}, email={}, UID={}", chat_id, email.address, uid);
+        return it->second;
+    }
+
+    it_email->second.last_uid = uid;
+
+    try {
+        m_storage->update_email(chat_id, email);
+    } catch (const std::out_of_range& ex) {
+        return std::unexpected(Errors::Repository::NotFound);
+    } catch (const std::exception& ex) {
+        log_error("failed update email in storage. chat_id: {}, email.id: {}. Error: {}", chat_id, email.id, ex.what());
+        return std::unexpected(Errors::Repository::Internal);
+    }
+
+    try {
+        return refresh(chat_id);
+    } catch (const std::exception& ex) {
+        log_error("failed refresh chat in cache. chat_id: {}. Error: {}", chat_id, ex.what());
+        return std::unexpected(Errors::Repository::Internal);
+    }
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Удаление информации об электронной почте
+ * @param chat_id  Иденитификатор чата
+ * @param email_id Идентификатор электронной почты
+ * @return TRUE, если данные удалены. Иначе FALSE.
+ */
+bool Cache::delete_email(int64_t chat_id, int64_t email_id) noexcept {
+
+    std::unique_lock lock(m_mutex);
+
+    try {
+        m_storage->delete_email(chat_id, email_id);
+    } catch (const std::out_of_range& ex) {
+        return false;
+    } catch (const std::exception& ex) {
+        log_error("failed delete email from storage. chat_id: {}, email_id: {}. Error: {}", chat_id, email_id, ex.what());
+        return false;
+    }
+
+    auto it = m_cache_data.find(chat_id);
+    if (it != m_cache_data.end()) {
+        m_cache_data.erase(it);
+    }
+
+    return true;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Добавление чата в кэш
+ * @param chat_id Идентификатор чата
+ * @return Итератор, указывающий на добавленный чат или end(), если не удалось заргузить чат из хранилища.
+ */
+std::unordered_map<int64_t, std::shared_ptr<Chat>>::iterator Cache::append(int64_t chat_id) {
+
+    auto chat_opt = m_storage->find_chat(chat_id);
+    if (!chat_opt) {
+        return m_cache_data.end();
+    }
+    auto chat_ptr = std::make_shared<Chat>(std::move(chat_opt.value()));
+    return m_cache_data.emplace_hint(m_cache_data.end(), chat_id, std::move(chat_ptr));
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Добавление чатов в кэш
+ * @param chat_ids Список идетнификаторов чатов
+ * @return Список добавленных чатов
+ */
+std::vector<std::shared_ptr<Chat>> Cache::append(const std::vector<int64_t>& chat_ids) {
+
+    std::vector<std::shared_ptr<Chat>> chats;
+    chats.reserve(chat_ids.size());
+
+    auto chats_storage = m_storage->find_chats(chat_ids);
+    for (Chat& chat : chats_storage) {
+
+        auto chat_ptr = std::make_shared<Chat>(std::move(chat));
+
+        m_cache_data[chat.chat_id] = chat_ptr;
+        chats.push_back(chat_ptr);
+    }
+
+    return chats;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/*!
+ * @brief Перезагрузка чата в кэше
+ * @param chat_id Идентификатор чата
+ * @return Указатель на перезагруженный чат
+ * 
+ * @throw std::runtime_error Если в хранилище чат не найден
+ */
+std::shared_ptr<Chat> Cache::refresh(int64_t chat_id) {
+
+    auto res_final = m_storage->find_chat(chat_id);
+    if (!res_final) {
+        throw std::runtime_error(std::format("not found chat in storage. chat_id = {}", chat_id));
+    }
+
+    auto chat = std::make_shared<Chat>(std::move(res_final.value()));
+
+    m_cache_data[chat->chat_id] = chat;
     return chat;
 }
 //----------------------------------------------------------------------------------------------------------------------

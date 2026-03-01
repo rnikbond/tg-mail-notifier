@@ -3,6 +3,7 @@
 #define MAILMANAGER_H
 //----------------------------------------------------------
 #include <condition_variable>
+#include <expected>
 #include <memory>
 #include <thread>
 //----------------------------------------------------------
@@ -32,9 +33,6 @@ private:
     void run();
 
     void scan_emails();
-
-    std::optional<std::vector<int64_t>> load_uids(const Email& email);
-    std::optional<std::string> load_email_msg(const Email& email, int64_t uid);
 };
 //----------------------------------------------------------------------------------------------------------------------
 

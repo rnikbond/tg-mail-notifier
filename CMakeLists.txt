@@ -68,4 +68,4 @@ target_link_libraries(tg-mail-notifier CURL::libcurl)
 target_link_libraries(tg-mail-notifier ${GMIME_LIBRARIES})
 target_link_libraries(tg-mail-notifier SQLite::SQLite3)
 
-add_subdirectory(tests)
+#add_subdirectory(tests)

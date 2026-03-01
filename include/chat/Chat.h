@@ -5,6 +5,7 @@
 #include <chrono>
 #include <set>
 #include <string>
+#include <unordered_map>
 //----------------------------------------------------------
 
 /**
@@ -42,11 +43,20 @@ struct TimeImterval
 //----------------------------------------------------------------------------------------------------------------------
 
 /**
+ * @brief Структура, описывающая настройки чата
+ */
+struct ChatSettings
+{
+    TimeImterval silent_interval; ///< Интервал, когда сообщения должны приходить без звука
+};
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
  * @brief Структура информации email
  */
 struct Email
 {
-    int64_t               m_id = {-1};
+    int64_t               id = {-1};          ///< Идентификатор записи
     std::string           address;            ///< Адрес. Например: "ololoev@mail.ru"
     std::string           password;           ///< Пароль для подключения к почте
     std::set<std::string> addr_filter_rules;  ///< Фильтры по отправителям. Например: {"info@service.ru", "*@sales.ru"}
@@ -55,8 +65,8 @@ struct Email
     int64_t               last_uid = {-1};
 
     /// @brief Пороверка корректности почты
-    bool is_valid() const {
-        return !address.empty() && !password.empty();
+    bool ok() const {
+        return !address.empty() && !password.empty() && last_uid >= 0;
     }
 };
 //----------------------------------------------------------------------------------------------------------------------
@@ -66,12 +76,13 @@ struct Email
  */
 struct Chat
 {
-    int64_t      chat_id = {};    ///< Идетнификатор чата из telegram
-    std::string  username;        ///: Логин из telegram
-    std::string  first_name;      ///: Имя пользователя из telegram
-    std::string  last_name;       ///: Фамилия пользователя из telegram
-    TimeImterval silent_interval; ///< Интервал, когда сообщения должны приходить без звука
-    Email        email;           ///< Данные об электронной почте
+    int64_t      chat_id = {}; ///< Идетнификатор чата из telegram
+    std::string  username;     ///< Логин из telegram
+    std::string  first_name;   ///< Имя пользователя из telegram
+    std::string  last_name;    ///< Фамилия пользователя из telegram
+    ChatSettings settings;     ///< Настройки чата
+
+    std::unordered_map<int64_t, Email> emails; ///< <email_id, Email> Данные об электронной почте
 };
 //----------------------------------------------------------------------------------------------------------------------
 #endif // CHAT_H
