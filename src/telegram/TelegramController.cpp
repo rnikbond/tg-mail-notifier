@@ -133,6 +133,7 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
     //log_debug(body_js.dump(4));
 
     if (!body_js.contains("result")) {
+        log_error("invalid JSON: does not contains 'result'\n{}", body_js.dump(4));
         throw std::runtime_error("invalid JSON: does not contains 'result'");
     }
 
@@ -143,6 +144,7 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
     }
 
     if (!body_js["result"][idx].contains("update_id")) {
+        log_error("invalid JSON: does not contains 'update_id' in [result][i]\n{}", body_js.dump(4));
         throw std::runtime_error("invalid JSON: does not contains 'update_id' in [result][i]");
     }
 
@@ -204,10 +206,12 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
  */
 int64_t TelegramController::find_chat_id(const json& body_js, int idx, const std::string_view tag) {
     if (!body_js["result"][idx][tag].contains("chat")) {
-        throw std::runtime_error("[TelegramController::find_chat_id] invalid JSON: does not contains 'chat' in [result][i][edited_message]");
+        log_error("invalid JSON: does not contains 'chat' in [result][i][edited_message]\n{}", body_js.dump(4));
+        throw std::runtime_error("invalid JSON: does not contains 'chat' in [result][i][edited_message]");
     }
     if (!body_js["result"][idx][tag]["chat"].contains("id")) {
-        throw std::runtime_error("[TelegramController::find_chat_id] invalid JSON: does not contains 'id' in [result][i][edited_message][chat]");
+        log_error("invalid JSON: does not contains 'id' in [result][i][edited_message][chat]\n{}", body_js.dump(4));
+        throw std::runtime_error("invalid JSON: does not contains 'id' in [result][i][edited_message][chat]");
     }
 
     return body_js["result"][idx][tag]["chat"]["id"];
@@ -224,6 +228,7 @@ int64_t TelegramController::find_chat_id(const json& body_js, int idx, const std
 std::shared_ptr<const Chat> TelegramController::register_chat(int64_t chat_id, int idx, const json& body_js) {
 
     if (!body_js["result"][idx]["message"]["chat"].contains("username")) {
+        log_error("invalid JSON: does not contains 'username' in [result][i][message][chat]\n{}", body_js.dump(4));
         throw std::runtime_error("invalid JSON: does not contains 'username' in [result][i][message][chat]");
     }
 
@@ -261,10 +266,12 @@ std::shared_ptr<const Chat> TelegramController::register_chat(int64_t chat_id, i
 RequestOpt TelegramController::handle_reply_on_cmd(const json& body_js, int idx, std::shared_ptr<const Chat> chat) {
 
     if (!body_js["result"][idx]["message"]["reply_to_message"].contains("text")) {
+        log_error("invalid JSON: does not contains 'text' in [result][i][message][reply_to_message]\n{}", body_js.dump(4));
         throw std::runtime_error("invalid JSON: does not contains 'text' in [result][i][message][reply_to_message]");
     }
 
     if (!body_js["result"][idx]["message"].contains("text")) {
+        log_error("invalid JSON: does not contains 'text' in [result][i][message]\n{}", body_js.dump(4));
         throw std::runtime_error("invalid JSON: does not contains 'text' in [result][i][message]");
     }
 
@@ -305,6 +312,7 @@ RequestOpt TelegramController::handle_reply_on_cmd(const json& body_js, int idx,
 RequestOpt TelegramController::handle_cmd(const json& body_js, int idx, std::shared_ptr<const Chat> chat) {
 
     if (!body_js["result"][idx]["message"].contains("text")) {
+        log_error("invalid JSON: does not contains 'text' in [result][i][message]\n{}", body_js.dump(4));
         throw std::runtime_error("invalid JSON: does not contains 'text' in [result][i][message]");
     }
 
