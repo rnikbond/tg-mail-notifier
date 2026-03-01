@@ -20,22 +20,23 @@ ChatOpt Cache::create(const Chat& chat) noexcept {
         return std::nullopt;
     }
 
+    {
+        std::shared_lock lock(m_mutex);
+        if (m_data.contains(chat.chat_id)) {
+            log_error("chat already exists. chat_id: {}", chat.chat_id);
+            return std::nullopt;
+        }
+    }
+
     std::unique_lock lock(m_mutex);
 
     try {
         m_storage->create(chat);
+        return refresh(chat.chat_id);
     } catch (const std::exception& ex) {
         log_error("failed create in storage: {}. chat_id = {}", ex.what(), chat.chat_id);
         return std::nullopt;
     }
-
-    if (!m_data.contains(chat.chat_id)) {
-        auto chat_shared     = std::make_shared<Chat>(chat);
-        m_data[chat.chat_id] = chat_shared;
-        return chat_shared;
-    }
-
-    return m_data.at(chat.chat_id);
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -50,12 +51,12 @@ bool Cache::update(const Chat& chat) noexcept {
 
     try {
         m_storage->update(chat);
+        refresh(chat.chat_id);
     } catch (const std::exception& ex) {
         log_error("failed update in storage: {}. chat id = {}", ex.what(), chat.chat_id);
         return false;
     }
 
-    m_data[chat.chat_id] = std::make_shared<Chat>(chat);
     return true;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -75,12 +76,12 @@ bool Cache::update_email(int64_t chat_id, const Email& email) noexcept {
 
     try {
         m_storage->update(chat);
+        refresh(chat.chat_id);
     } catch (const std::exception& ex) {
         log_error("failed update in storage: {}. chat id = {}", ex.what(), chat.chat_id);
         return false;
     }
 
-    m_data[chat.chat_id] = std::make_shared<Chat>(chat);
     return true;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -140,5 +141,20 @@ std::unordered_map<int64_t, Email> Cache::chats() noexcept {
     }
 
     return chats_email;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+std::shared_ptr<Chat> Cache::refresh(int64_t chat_id) {
+
+    auto res_final = m_storage->find({chat_id});
+    if (!res_final || res_final.value().size() != 1) {
+        std::string text = std::format("not found chat in storage.chat id = {}", chat_id);
+        log_error(text);
+        throw std::runtime_error(text);
+    }
+
+    auto chat             = std::make_shared<Chat>(std::move(res_final.value().at(0)));
+    m_data[chat->chat_id] = chat;
+    return chat;
 }
 //----------------------------------------------------------------------------------------------------------------------

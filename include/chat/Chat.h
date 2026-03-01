@@ -46,6 +46,7 @@ struct TimeImterval
  */
 struct Email
 {
+    int64_t               m_id = {-1};
     std::string           address;            ///< Адрес. Например: "ololoev@mail.ru"
     std::string           password;           ///< Пароль для подключения к почте
     std::set<std::string> addr_filter_rules;  ///< Фильтры по отправителям. Например: {"info@service.ru", "*@sales.ru"}

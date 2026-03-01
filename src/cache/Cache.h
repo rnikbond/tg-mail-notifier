@@ -35,6 +35,10 @@ private:
 
     std::unique_ptr<IStorage> m_storage;
     std::unordered_map<int64_t, std::shared_ptr<Chat>> m_data;
+
+private:
+
+    std::shared_ptr<Chat> refresh(int64_t chat_id);
 };
 //----------------------------------------------------------------------------------------------------------------------
 
