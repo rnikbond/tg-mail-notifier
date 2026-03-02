@@ -12,10 +12,17 @@
  * @sa TelegramSenderFactory
  */
 class TelegramSender : public ITelegramSender {
-public:
+
+private:
 
     TelegramSender(const std::string& host, const std::string& token);
+    friend class TelegramSenderFactory;
+
+public:
+
     ~TelegramSender() = default;
+
+public:
 
     virtual bool send_msg(int64_t chat_id, const std::string& body) const noexcept override;
 

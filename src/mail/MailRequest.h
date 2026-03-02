@@ -4,6 +4,8 @@
 //----------------------------------------------------------
 #include "mail/IMailRequest.h"
 //----------------------------------------------------------
+class MailRequestFactory;
+//----------------------------------------------------------
 
 /**
  * @brief Класс для запросов к почтовому серверу, реализующий интерфейс IMailRequest
@@ -13,9 +15,13 @@
  */
 class MailRequest : public IMailRequest {
 
+private:
+
+    MailRequest() = default;
+    friend class MailRequestFactory;
+
 public:
 
-    MailRequest()  = default;
     ~MailRequest() = default;
 
 public:

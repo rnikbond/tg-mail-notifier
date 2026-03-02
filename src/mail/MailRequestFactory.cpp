@@ -4,7 +4,7 @@
 #include "MailRequestFactory.h"
 //----------------------------------------------------------
 
-MailRequestFactory::MailCreator MailRequestFactory::default_func = []() { return std::make_unique<MailRequest>(); };
+MailRequestFactory::MailCreator MailRequestFactory::default_func = []() { return std::unique_ptr<MailRequest>(new MailRequest()); };
 //----------------------------------------------------------------------------------------------------------------------
 
 /**

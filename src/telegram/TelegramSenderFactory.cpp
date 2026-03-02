@@ -21,13 +21,13 @@ void TelegramSenderFactory::replace(SenderBuilder func) {
 
 void TelegramSenderFactory::restore() {
 
-    create_func() = []() { return std::make_unique<TelegramSender>(m_host, m_token); };
+    create_func() = []() { return std::unique_ptr<TelegramSender>(new TelegramSender(m_host, m_token)); };
 }
 //----------------------------------------------------------------------------------------------------------------------
 
 TelegramSenderFactory::SenderBuilder& TelegramSenderFactory::create_func() {
 
-    static SenderBuilder func = []() { return std::make_unique<TelegramSender>(m_host, m_token); };
+    static SenderBuilder func = []() { return std::unique_ptr<TelegramSender>(new TelegramSender(m_host, m_token)); };
     return func;
 }
 //----------------------------------------------------------------------------------------------------------------------
