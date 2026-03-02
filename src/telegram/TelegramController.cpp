@@ -80,7 +80,7 @@ TelegramController::TelegramController(const std::string& token, std::shared_ptr
 
 /**
  * @brief Получение запроса для отправки команд в telegram бот
- * @return 
+ * @return Запрос в telegram для инициализации списка команд
  */
 RequestOpt TelegramController::commands() const {
 
@@ -110,6 +110,7 @@ RequestOpt TelegramController::commands() const {
     request.url          = std::format(url, m_token);
     request.body         = js_body.dump();
     request.content_type = "application/json";
+    request.chat_id      = 0;
 
     return request;
 }
@@ -120,6 +121,8 @@ RequestOpt TelegramController::commands() const {
  * @param[in]  response    Данные ответа
  * @param[out] last_msg_id Идентификатор последнего прочитанного сообщения
  * @return Данные для отправки запроса в telegram, или nullopt, если это сообщение проигнорировано
+ * 
+ * @throw std::runtime_error Выбрасывается в случае ошибки при чтении JSON из response
  */
 RequestOpt TelegramController::process(const TelegramResponse&& response, int64_t& last_msg_id) {
 
@@ -196,6 +199,8 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
  * @param idx     Индекс сообщения из массива JSON: ["result"]
  * @param tag     Тег
  * @return Идентификатор чата
+ * 
+ * @throw std::runtime_error Выбрасывается в случае ошибки при чтении JSON
  */
 int64_t TelegramController::find_chat_id(const json& body_js, int idx, const std::string_view tag) {
     if (!body_js["result"][idx][tag].contains("chat")) {
@@ -217,6 +222,8 @@ int64_t TelegramController::find_chat_id(const json& body_js, int idx, const std
  * @param idx     Индекс сообщения из массива JSON: ["result"]
  * @param body_js Данные в виде JSON объекта
  * @return Указатель на созданный чат
+ * 
+ * @throw std::runtime_error Выбрасывается в случае ошибки при чтении JSON или при ошибке регистрации чата в репозитории
  */
 std::shared_ptr<const Chat> TelegramController::register_chat(int64_t chat_id, int idx, const json& body_js) {
 
@@ -253,6 +260,8 @@ std::shared_ptr<const Chat> TelegramController::register_chat(int64_t chat_id, i
  * @param idx     Индекс сообщения из массива JSON: ["result"]
  * @param chat    Указатель на чат
  * @return Данные для отправки в telegram или nullopt
+ * 
+ * @throw std::runtime_error Выбрасывается в случае ошибки при чтении JSON
  * 
  * Изменение данных реализовано через ответ на сообщение
  */
@@ -301,6 +310,8 @@ RequestOpt TelegramController::handle_reply_on_cmd(const json& body_js, int idx,
  * @param idx     Индекс сообщения из массива JSON: ["result"]
  * @param chat    Указатель на чат
  * @return Данные для отправки в telegram или nullopt
+ * 
+ * @throw std::runtime_error Выбрасывается в случае ошибки при чтении JSON
  */
 RequestOpt TelegramController::handle_cmd(const json& body_js, int idx, std::shared_ptr<const Chat> chat) {
 
@@ -346,6 +357,8 @@ RequestOpt TelegramController::handle_cmd(const json& body_js, int idx, std::sha
  * @param idx     Индекс сообщения из массива JSON: ["result"]
  * @param chat    Указатель на чат
  * @return Данные для отправки в telegram или nullopt
+ * 
+ * @throw std::runtime_error Выбрасывается в случае ошибки при чтении JSON
  */
 TelegramRequest TelegramController::process_cmd_value_email(const json& body_js, int idx, std::shared_ptr<const Chat> chat) {
 
@@ -410,6 +423,8 @@ TelegramRequest TelegramController::process_cmd_value_email(const json& body_js,
  * @param idx     Индекс сообщения из массива JSON: ["result"]
  * @param chat    Указатель на чат
  * @return Данные для отправки в telegram или nullopt
+ * 
+ * @throw std::runtime_error Выбрасывается в случае ошибки при чтении JSON
  */
 TelegramRequest TelegramController::process_cmd_value_password(const json& body_js, int idx, std::shared_ptr<const Chat> chat) {
 
@@ -460,7 +475,7 @@ TelegramRequest TelegramController::process_cmd_value_password(const json& body_
 /*!
  * @brief Обработка ответа на команду "/clear_email_auth"
  * @param chat Указатель на чат
- * @return 
+ * @return Данные для отправки в telegram или nullopt
  */
 TelegramRequest TelegramController::process_cmd_clear_email_auth(std::shared_ptr<const Chat> chat) {
 
@@ -585,6 +600,7 @@ TelegramRequest TelegramController::prepare_request_text(std::shared_ptr<const C
     request.url          = std::format(url, m_token);
     request.body         = js_body.dump();
     request.content_type = "application/json";
+    request.chat_id      = chat->chat_id;
 
     return request;
 }
@@ -604,6 +620,7 @@ TelegramRequest TelegramController::prepare_request_json(std::shared_ptr<const C
     request.url          = std::format(url, m_token);
     request.body         = js_body.dump();
     request.content_type = "application/json";
+    request.chat_id      = chat->chat_id;
 
     return request;
 }

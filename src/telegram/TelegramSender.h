@@ -2,7 +2,10 @@
 #ifndef TELEGRAMSENDER_H
 #define TELEGRAMSENDER_H
 //----------------------------------------------------------
+#include "httplib.h"
+//----------------------------------------------------------
 #include "telegram/ITelegramSender.h"
+#include "telegram/TelegramAPI.h"
 //----------------------------------------------------------
 
 /**
@@ -25,11 +28,16 @@ public:
 public:
 
     virtual bool send_msg(int64_t chat_id, const std::string& body) const noexcept override;
+    virtual bool send_msg(const TelegramRequest& request) const noexcept override;
 
 private:
 
     std::string m_host;
     std::string m_token;
+
+private:
+
+    std::optional<httplib::Error> execute(const std::string& url, const std::string& body, const std::string& content_type, int64_t chat_id) const;
 };
 //----------------------------------------------------------------------------------------------------------------------
 

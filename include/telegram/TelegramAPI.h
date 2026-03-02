@@ -27,6 +27,7 @@ struct TelegramResponse
  */
 struct TelegramRequest
 {
+    int64_t     chat_id = {-1};
     std::string url;
     std::string content_type;
     std::string body;

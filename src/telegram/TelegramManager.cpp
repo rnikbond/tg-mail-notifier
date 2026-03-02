@@ -1,15 +1,16 @@
 //----------------------------------------------------------
+#include "TelegramSenderFactory.h"
 #include "logger.h"
 //----------------------------------------------------------
 #include "TelegramManager.h"
 //----------------------------------------------------------
 
-/*!
+/**
  * @brief Конструктор класса
- * @param host_port 
- * @param token
- * @param timeout
- * @param repo
+ * @param host    Хост telegram сервера
+ * @param token   Токен бота
+ * @param timeout Время удержания соединения для ожидания ответа в сек.
+ * @param repo    Указатель на репозиторий
  */
 TelegramManager::TelegramManager(const std::string& host, const std::string& token, size_t timeout, std::shared_ptr<IRepository> repo)
     : m_token(token)
@@ -38,6 +39,8 @@ TelegramManager::~TelegramManager() {
 
 /*!
  * @brief Запуск telegram менеджера
+ * 
+ * @throw std::runtime_error Выбрасывается, если не удалось установить команды для бота
  */
 void TelegramManager::start() {
 
@@ -89,26 +92,29 @@ void TelegramManager::run() {
 
     constexpr std::string_view url_template = "/bot{}/getUpdates?offset={}&timeout={}";
 
+    auto tg_sender = TelegramSenderFactory::create();
+
     while (true) {
 
         std::unique_lock<std::mutex> lock(m_mutex);
 
-        int64_t         upd_id = (m_last_chat_update_id == -1) ? -1 : m_last_chat_update_id + 1;
-        std::string     url    = std::format(url_template, m_token, upd_id, m_timeout);
-        httplib::Result msg = m_http->Get(url);
-        if (!msg) {
-            auto err = msg.error();
+        int64_t     upd_id = (m_last_chat_update_id == -1) ? -1 : m_last_chat_update_id + 1;
+        std::string url    = std::format(url_template, m_token, upd_id, m_timeout);
+
+        httplib::Result res = m_http->Get(url);
+        if (!res) {
+            auto err = res.error();
             log_error(std::format("http::Get({}) returned error: {}", url, httplib::to_string(err)));
             continue;
         }
 
         try {
             TelegramResponse response;
-            response.body = msg->body;
+            response.body = res->body;
 
             auto request = m_controller->process(std::move(response), m_last_chat_update_id);
             if (request.has_value()) {
-                send_msg(std::move(request.value()));
+                tg_sender->send_msg(request.value());
             }
 
         } catch (const std::exception& ex) {
