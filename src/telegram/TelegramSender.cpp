@@ -103,7 +103,7 @@ std::optional<httplib::Error> TelegramSender::execute(const std::string &url, co
         const int max_retries = 3;
         for (int attempt = 1; attempt <= max_retries; attempt++) {
 
-            log_info("send msg in telegram. chat_id: {}, attempt {}/{}", chat_id, attempt, max_retries);
+            log_info("send msg in telegram. chat_id={}, attempt={}/{}", chat_id, attempt, max_retries);
 
             auto res = http->Post(url, body, content_type);
             if (res) {

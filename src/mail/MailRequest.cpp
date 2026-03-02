@@ -151,7 +151,7 @@ Errors::Mail MailRequest::execute_request(const Email& email, const std::string&
             case CURLE_LOGIN_DENIED:
                 return Errors::Mail::Auth;
             default:
-                log_warn("error CURL. attempt {}/{}. email: {}, error: [{}], {}",
+                log_warn("error CURL. attempt={}/{}. email={}, error: [code={}] {}",
                          attempt,
                          max_retries,
                          email.address,
@@ -207,7 +207,7 @@ Errors::Mail MailRequest::execute_url(const Email& email, const std::string& url
             case CURLE_LOGIN_DENIED:
                 return Errors::Mail::Auth;
             default:
-                log_warn("error CURL. attempt {}/{}. email: {}, error: [{}], {}",
+                log_warn("error CURL. attempt={}/{}. email:={}, error: [code={}] {}",
                          attempt,
                          max_retries,
                          email.address,

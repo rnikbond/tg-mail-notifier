@@ -96,7 +96,7 @@ void MailManager::scan_mails() {
             //: Загрузка UIDs новых писем
             auto uids_res = mail_loader->load_uids(email);
             if (!uids_res.has_value()) {
-                log_error("failed load new mail UIDs. chat_id={}, email={}, last_UID={}, error: ",
+                log_error("failed load new mail UIDs. chat_id={}, email={}, last_UID={}, error: {}",
                           chat->chat_id,
                           email.address,
                           email.last_uid,
