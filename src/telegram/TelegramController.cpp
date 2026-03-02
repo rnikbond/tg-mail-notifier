@@ -487,7 +487,7 @@ TelegramRequest TelegramController::prepare_request_status(std::shared_ptr<const
         status_emails = "❌ Почта не указана";
     } else {
         for (const Email& email : chat->emails | std::views::values) {
-            status_emails += std::format("📧 Почта: {}, 🔑 Пароль: {}, 👁‍🗨 Статус: {}",
+            status_emails += std::format("📧 Почта: {}\n🔑 Пароль: {}\n👁‍🗨 Статус: {}",
                                          email.address,
                                          (email.password.empty() ? "❌" : "✅"),
                                          email.last_uid >= 0 ? "✅ Сканирование работает" : "❌ Сканирование не работает");

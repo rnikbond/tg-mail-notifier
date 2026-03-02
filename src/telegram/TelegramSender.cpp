@@ -68,7 +68,6 @@ bool TelegramSender::send_msg(int64_t chat_id, const std::string &body) const no
 bool TelegramSender::send_msg(const TelegramRequest &request) const noexcept {
 
     try {
-        log_info("send msg in telegram. url: {}", request.url);
         auto err = execute(request.url, request.body, request.content_type, request.chat_id);
         if (err) {
             return false;
