@@ -319,7 +319,17 @@ TelegramRequest TelegramController::process_reply_email(const json& body_js, int
     if (!email.address.empty() && !email.password.empty()) {
         auto res = check_email_auth(chat->chat_id, email);
         if (!res) {
-            return prepare_request_text(chat, "❌ Ошибка авторизации на почте: некорректный email или пароль");
+            std::string text = std::format("❌ Ошибка авторизации на почте"
+                                           "\n\n"
+                                           "Email: {}"
+                                           "\n"
+                                           "<b>Некорректный email или пароль</b>"
+                                           "\n\n"
+                                           "Исправьте Email {} или пароль {}",
+                                           email.address,
+                                           find_command_text(Commands::Email),
+                                           find_command_text(Commands::Password));
+            return prepare_request_text(chat, text);
         }
 
         email.last_uid = res.value();
@@ -399,9 +409,14 @@ TelegramRequest TelegramController::process_reply_password(const json& body_js, 
     if (!email.password.empty()) {
         auto res = check_email_auth(chat->chat_id, email);
         if (!res.has_value()) {
-            std::string text = std::format("❌ Ошибка авторизации на почте: некорректный пароль."
+            std::string text = std::format("❌ Ошибка авторизации на почте"
                                            "\n\n"
-                                           "Исправьте {} или выполните команду {} снова",
+                                           "Email: {}"
+                                           "\n"
+                                           "<b>Некорректный email или пароль</b>"
+                                           "\n\n"
+                                           "Исправьте Email {} или пароль {}",
+                                           email.address,
                                            find_command_text(Commands::Email),
                                            find_command_text(Commands::Password));
             return prepare_request_text(chat, text);
