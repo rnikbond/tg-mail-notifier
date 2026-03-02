@@ -1,5 +1,6 @@
 //----------------------------------------------------------
 #include <ranges>
+#include <regex>
 //----------------------------------------------------------
 #include "logger.h"
 //----------------------------------------------------------
@@ -155,6 +156,10 @@ IRepository::Chats Cache::chats() noexcept {
 */
 IRepository::ChatResult Cache::append_email(int64_t chat_id, const Email& email) noexcept {
 
+    if (!is_correct_email_addr(email.address)) {
+        return std::unexpected(Errors::Repository::InvalidEmail);
+    }
+
     std::unique_lock lock(m_mutex);
 
     auto it = m_cache_data.find(chat_id);
@@ -199,6 +204,10 @@ IRepository::ChatResult Cache::append_email(int64_t chat_id, const Email& email)
 * @return Чат с обновленными данными или ошибку, если не удалось добавить
 */
 IRepository::ChatResult Cache::update_email(int64_t chat_id, const Email& email) noexcept {
+
+    if (!is_correct_email_addr(email.address)) {
+        return std::unexpected(Errors::Repository::InvalidEmail);
+    }
 
     std::unique_lock lock(m_mutex);
 
@@ -377,5 +386,20 @@ std::shared_ptr<Chat> Cache::refresh(int64_t chat_id) {
 
     m_cache_data[chat->chat_id] = chat;
     return chat;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Проверка корректности адреса электронной почты
+ * @param addr Адрес электронной почты
+ * @return TRUE, если адрес корректный. Иначе FALSE.
+ */
+bool Cache::is_correct_email_addr(const std::string_view& addr) const noexcept {
+    const std::regex pattern(R"(^[\w\.-]+@[\w\.-]+\.\w{2,4}$)");
+    if (!std::regex_match(static_cast<std::string>(addr), pattern)) {
+        return false;
+    }
+
+    return true;
 }
 //----------------------------------------------------------------------------------------------------------------------

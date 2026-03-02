@@ -48,6 +48,10 @@ private:
     std::unordered_map<int64_t, std::shared_ptr<Chat>>::iterator append(int64_t chat_id);
     std::vector<std::shared_ptr<Chat>> append(const std::vector<int64_t>& chat_ids);
     std::shared_ptr<Chat> refresh(int64_t chat_id);
+
+private:
+
+    bool is_correct_email_addr(const std::string_view& addr) const noexcept;
 };
 //----------------------------------------------------------------------------------------------------------------------
 

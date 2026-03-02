@@ -1,7 +1,5 @@
 //----------------------------------------------------------
-#include <regex>
-//----------------------------------------------------------
-#define JSON_DIAGNOSTICS 1 //: Включение
+#define JSON_DIAGNOSTICS 1 //: Включение детальной информации json::exception
 #include "nlohmann/json.hpp"
 //----------------------------------------------------------
 #include "logger.h"
@@ -281,7 +279,7 @@ RequestOpt TelegramController::handle_cmd(const json& body_js, int idx, std::sha
         case Commands::Password:
 
             if (chat->emails.empty() || chat->emails.at(0).address.empty()) {
-                std::string text = std::format("Сначала нужно указать через команду: {}\n", find_command_text(Commands::Email));
+                std::string text = std::format("Сначала нужно указать Email через команду: {}\n", find_command_text(Commands::Email));
                 return prepare_request_text(chat, text);
             }
 
@@ -311,11 +309,6 @@ TelegramRequest TelegramController::process_reply_email(const json& body_js, int
     std::string      text  = body_js["result"][idx]["message"]["text"];
     std::string_view value = text;
     strip_whitespace(value);
-
-    const std::regex pattern(R"(^[\w\.-]+@[\w\.-]+\.\w{2,4}$)");
-    if (!std::regex_match(static_cast<std::string>(value), pattern)) {
-        return prepare_request_text(chat, "Некорректный Email");
-    }
 
     Email email;
     if (!chat->emails.empty()) {
@@ -393,7 +386,7 @@ TelegramRequest TelegramController::process_reply_email(const json& body_js, int
 TelegramRequest TelegramController::process_reply_password(const json& body_js, int idx, std::shared_ptr<const Chat> chat) {
 
     if (chat->emails.empty() || chat->emails.at(0).address.empty()) {
-        std::string text = std::format("Сначала нужно указать через команду: {}\n", find_command_text(Commands::Email));
+        std::string text = std::format("Сначала нужно указать Email через команду: {}\n", find_command_text(Commands::Email));
         return prepare_request_text(chat, text);
     }
 
@@ -625,10 +618,10 @@ std::optional<int64_t> TelegramController::check_email_auth(int64_t chat_id, con
 
     switch (res.error()) {
         case Errors::Mail::Auth:
-            log_info("failed load last mail UID. chat_id={}, email={}, error: {}", chat_id, email.address, static_cast<int>(res.error()));
+            log_info("failed load last mail UID. chat_id={}, email={}, error: {}", chat_id, email.address, Errors::to_string(res.error()));
             break;
         default:
-            log_warn("failed load last mail UID. chat_id={}, email={}, error: {}", chat_id, email.address, static_cast<int>(res.error()));
+            log_warn("failed load last mail UID. chat_id={}, email={}, error: {}", chat_id, email.address, Errors::to_string(res.error()));
             break;
     }
 
