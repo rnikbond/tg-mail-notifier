@@ -9,8 +9,6 @@
 #include "MailRequest.h"
 //----------------------------------------------------------
 
-// Callback для записи данных в строку
-
 /**
  * @brief Callback для CURL, с помощью которой записывается результат запроса
  * @param[in]  contents Данные
@@ -123,7 +121,7 @@ IMailRequest::MailMsgResult MailRequest::fetch_email(const Email& email, int64_t
  * @param[out] response Данные ответа на запрос
  * @return Ошибку выполнения запроса
  */
-Errors::Mail MailRequest::execute_request(const Email& email, const std::string& request, std::string& response) const {
+Errors::Mail MailRequest::execute_request(const Email& email, const std::string& request, std::string& response) const noexcept {
 
     auto deleter = [](CURL* curl) { curl_easy_cleanup(curl); };
 
@@ -157,8 +155,8 @@ Errors::Mail MailRequest::execute_request(const Email& email, const std::string&
                          attempt,
                          max_retries,
                          email.address,
-                         curl_easy_strerror(res),
-                         static_cast<int>(res));
+                         static_cast<int>(res),
+                         curl_easy_strerror(res));
                 //: Активация детального вывода полсле получения неизвестной ошибки
                 curl_easy_setopt(curl.get(), CURLOPT_VERBOSE, 1L);
                 break;
@@ -176,7 +174,7 @@ Errors::Mail MailRequest::execute_request(const Email& email, const std::string&
  * @param[out] response Данные ответа на запрос
  * @return Ошибку выполнения запроса
  */
-Errors::Mail MailRequest::execute_url(const Email& email, const std::string& url, std::string& response) const {
+Errors::Mail MailRequest::execute_url(const Email& email, const std::string& url, std::string& response) const noexcept {
 
     auto deleter = [](CURL* curl) { curl_easy_cleanup(curl); };
 
@@ -213,8 +211,8 @@ Errors::Mail MailRequest::execute_url(const Email& email, const std::string& url
                          attempt,
                          max_retries,
                          email.address,
-                         curl_easy_strerror(res),
-                         static_cast<int>(res));
+                         static_cast<int>(res),
+                         curl_easy_strerror(res));
                 //: Активация детального вывода полсле получения неизвестной ошибки
                 curl_easy_setopt(curl.get(), CURLOPT_VERBOSE, 1L);
                 break;
@@ -268,7 +266,7 @@ Errors::Mail MailRequest::execute_url(const Email& email, const std::string& url
  * @param[out] title  Заголовок письма
  * @param[out] body   Тело письма
  */
-void MailRequest::extract_text_gmime(const std::string& raw_email, std::string& sender, std::string& dt, std::string& title, std::string& body) const {
+void MailRequest::extract_text_gmime(const std::string& raw_email, std::string& sender, std::string& dt, std::string& title, std::string& body) const noexcept {
 
     g_mime_init();
 

@@ -94,10 +94,10 @@ RequestOpt TelegramController::commands() const {
     // clang-format off
     json js_body = {
         { "commands", {
-                {{"command", cmd_text(Commands::About)   }, {"description", "Обо мне"}},
-                {{"command", cmd_text(Commands::Status)  }, {"description", "Текущее состояние"}},
-                {{"command", cmd_text(Commands::Email)   }, {"description", "Изменить email"}},
-                {{"command", cmd_text(Commands::Password)}, {"description", "Изменить пароль Email"}},
+                {{"command", cmd_text(Commands::Status)        }, {"description", "Статус"}},
+                {{"command", cmd_text(Commands::Email)         }, {"description", "Изменить email"}},
+                {{"command", cmd_text(Commands::Password)      }, {"description", "Изменить пароль Email"}},
+                {{"command", cmd_text(Commands::About)         }, {"description", "Обо мне"}},
                 {{"command", cmd_text(Commands::ClearEmailAuth)}, {"description", "Очистить Email и пароль"}},
             }
         }

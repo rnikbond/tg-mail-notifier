@@ -26,7 +26,7 @@ IRepository::ChatResult Cache::create_chat(const Chat& chat) noexcept {
         return std::unexpected(Errors::Repository::InvalidChat);
     }
 
-    {
+    { //: Проверка наличия такого чата
         std::shared_lock lock(m_mutex);
         if (m_cache_data.contains(chat.chat_id)) {
             return std::unexpected(Errors::Repository::AlreadyExists);

@@ -9,6 +9,13 @@
 using json = nlohmann::json;
 //----------------------------------------------------------
 
+/*!
+ * @brief Конструкток класса
+ * @param host  Хост telegram сервера
+ * @param token Токен бота
+ * 
+ * @throw std::runtime_error Выбрасывается, если \a host или \a token пусты
+ */
 TelegramSender::TelegramSender(const std::string &host, const std::string &token)
     : m_host(host)
     , m_token(token) {
@@ -23,6 +30,12 @@ TelegramSender::TelegramSender(const std::string &host, const std::string &token
 }
 //----------------------------------------------------------------------------------------------------------------------
 
+/*!
+ * @brief Запрос на отправку сообщения в telegram бот
+ * @param chat_id Идентификатор telegram чата
+ * @param body    Текстовое тело сообщения
+ * @return TRUE, если сообщение успешно отправлено. Иначе FALSE.
+ */
 bool TelegramSender::send_msg(int64_t chat_id, const std::string &body) const noexcept {
 
     constexpr std::string_view url = "/bot{}/sendMessage";

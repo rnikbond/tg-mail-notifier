@@ -59,7 +59,7 @@ void MailManager::run() {
 
         std::unique_lock<std::mutex> lock(m_mutex);
 
-        scan_emails();
+        scan_mails();
 
         bool is_stop = m_cond_wait.wait_for(lock, std::chrono::seconds(60), [&]() { return m_request_stop; });
         if (is_stop) {
@@ -73,7 +73,7 @@ void MailManager::run() {
 /**
  * @brief Сканирование новых писем
  */
-void MailManager::scan_emails() {
+void MailManager::scan_mails() {
 
     auto chats = m_repo->chats();
 

@@ -5,6 +5,12 @@
 #include "telegram/ITelegramSender.h"
 //----------------------------------------------------------
 
+/**
+ * @brief Класс для отправки сообщения в telegram, реализающий интерфейс ITelegramSender
+ * 
+ * Данный класс должен создаваться через фибрику объектов.
+ * @sa TelegramSenderFactory
+ */
 class TelegramSender : public ITelegramSender {
 public:
 

@@ -9,6 +9,9 @@
 #include "telegram/ITelegramSender.h"
 //----------------------------------------------------------
 
+/**
+ * @brief Класс-фабрика для создания объектов для отправки сообщений в telegram чат
+ */
 class TelegramSenderFactory {
 
     using SenderBuilder = std::function<std::unique_ptr<ITelegramSender>()>;

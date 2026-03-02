@@ -14,10 +14,11 @@ using json = nlohmann::json;
 using RequestOpt = std::optional<TelegramRequest>;
 //----------------------------------------------------------
 
-/*!
+/**
  * @brief Контроллер для работы с telegram ботом
  * 
- * Данный контроллер обрабатывает сообщения из telegram и возвращате структуру с данными для отправки в telegram чат.
+ * Данный контроллер обрабатывает сообщения из telegram и возвращает структуру с данными для отправки в telegram чат.
+ * Также этот класс предоставляет список доступных команд для telegram бота.
  */
 class TelegramController {
 
@@ -31,7 +32,6 @@ public:
 private:
 
     std::string m_token;
-
     std::shared_ptr<IRepository> m_repo;
 
 private:

@@ -4,11 +4,18 @@
 #include "TelegramManager.h"
 //----------------------------------------------------------
 
-TelegramManager::TelegramManager(const std::string& host_port, const std::string& token, size_t timeout, std::shared_ptr<IRepository> repo)
+/*!
+ * @brief Конструктор класса
+ * @param host_port 
+ * @param token
+ * @param timeout
+ * @param repo
+ */
+TelegramManager::TelegramManager(const std::string& host, const std::string& token, size_t timeout, std::shared_ptr<IRepository> repo)
     : m_token(token)
     , m_timeout(timeout)
     , m_repo(repo)
-    , m_http(std::make_unique<httplib::Client>(host_port))
+    , m_http(std::make_unique<httplib::Client>(host))
     , m_controller(std::make_unique<TelegramController>(token, repo)) {
 
     if (m_token.empty()) {
