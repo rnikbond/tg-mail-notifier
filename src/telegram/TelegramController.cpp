@@ -153,7 +153,7 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
                 chat = std::move(chat_res.value());
             } else {
                 chat = register_chat(chat_id, idx, body_js);
-                log_info("new chat registered. chat_id={}, username={}", chat->chat_id, chat->username);
+                log_info("new chat registered. chat_id={}, username={}", chat->id, chat->username);
             }
         }
 
@@ -189,7 +189,7 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
 std::shared_ptr<const Chat> TelegramController::register_chat(int64_t chat_id, int idx, const json& body_js) {
 
     Chat chat;
-    chat.chat_id = chat_id;
+    chat.id = chat_id;
 
     auto chat_json = body_js["result"][idx]["message"]["chat"];
 
@@ -317,7 +317,7 @@ TelegramRequest TelegramController::process_reply_email(const json& body_js, int
 
     email.address = value;
     if (!email.address.empty() && !email.password.empty()) {
-        auto res = check_email_auth(chat->chat_id, email);
+        auto res = check_email_auth(chat->id, email);
         if (!res) {
             std::string text = std::format("❌ Ошибка авторизации на почте"
                                            "\n\n"
@@ -339,16 +339,16 @@ TelegramRequest TelegramController::process_reply_email(const json& body_js, int
     auto err = Errors::Repository::OK;
 
     if (email.id >= 0) {
-        auto res = m_repo->update_email(chat->chat_id, email);
+        auto res = m_repo->update_email(chat->id, email);
         if (res.has_value()) {
-            log_info("email address successfully updated. chat_id={}, email={}", chat->chat_id, email.address);
+            log_info("email address successfully updated. chat_id={}, email={}", chat->id, email.address);
         } else {
             err = std::move(res.error());
         }
     } else {
-        auto res = m_repo->append_email(chat->chat_id, email);
+        auto res = m_repo->append_email(chat->id, email);
         if (res.has_value()) {
-            log_info("email address successfully added. chat_id={}, email={}", chat->chat_id, email.address);
+            log_info("email address successfully added. chat_id={}, email={}", chat->id, email.address);
         } else {
             err = std::move(res.error());
         }
@@ -362,7 +362,7 @@ TelegramRequest TelegramController::process_reply_email(const json& body_js, int
         case Errors::Repository::InvalidEmail:
             return prepare_request_text(chat, "❗️ Некорректный email");
         default:
-            log_error("failed update email. chat id={}, error: {}", chat->chat_id, Errors::to_string(err));
+            log_error("failed update email. chat id={}, error: {}", chat->id, Errors::to_string(err));
             return prepare_request_internal_err(chat);
     }
 
@@ -407,7 +407,7 @@ TelegramRequest TelegramController::process_reply_password(const json& body_js, 
     Email email    = chat->emails.at(0);
     email.password = value;
     if (!email.password.empty()) {
-        auto res = check_email_auth(chat->chat_id, email);
+        auto res = check_email_auth(chat->id, email);
         if (!res.has_value()) {
             std::string text = std::format("❌ Ошибка авторизации на почте"
                                            "\n\n"
@@ -427,9 +427,9 @@ TelegramRequest TelegramController::process_reply_password(const json& body_js, 
         log_info("email successfully registered: email={}, last_uid={}", email.address, email.last_uid);
     }
 
-    auto res = m_repo->update_email(chat->chat_id, email);
+    auto res = m_repo->update_email(chat->id, email);
     if (!res.has_value()) {
-        log_error("failed update password for email. chat id={}, error: {}", chat->chat_id, Errors::to_string(res.error()));
+        log_error("failed update password for email. chat id={}, error: {}", chat->id, Errors::to_string(res.error()));
         return prepare_request_internal_err(chat);
     }
 
@@ -450,14 +450,14 @@ TelegramRequest TelegramController::process_reply_password(const json& body_js, 
 TelegramRequest TelegramController::process_cmd_clear_email_auth(std::shared_ptr<const Chat> chat) const noexcept {
 
     for (int64_t email_id : chat->emails | std::views::keys) {
-        bool ok = m_repo->delete_email(chat->chat_id, email_id);
+        bool ok = m_repo->delete_email(chat->id, email_id);
         if (!ok) {
-            log_error("failed clear email in repository. chat id={}", chat->chat_id);
+            log_error("failed clear email in repository. chat id={}", chat->id);
             return prepare_request_internal_err(chat);
         }
     }
 
-    log_info("success clear email in repoisitory. chat_id={}", chat->chat_id);
+    log_info("success clear email in repoisitory. chat_id={}", chat->id);
     return prepare_request_text(chat, "✅ Данные email очищены");
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -522,7 +522,7 @@ TelegramRequest TelegramController::prepare_request_status(std::shared_ptr<const
 TelegramRequest TelegramController::prepare_request_email(std::shared_ptr<const Chat> chat) const noexcept {
 
     json js_body;
-    js_body["chat_id"]      = chat->chat_id;
+    js_body["chat_id"]      = chat->id;
     js_body["text"]         = std::format("{}\nВведите Email:", find_command_text(Commands::Email));
     js_body["reply_markup"] = {{"force_reply", true}, {"input_field_placeholder", "example@mail.com"}};
 
@@ -538,7 +538,7 @@ TelegramRequest TelegramController::prepare_request_email(std::shared_ptr<const 
 TelegramRequest TelegramController::prepare_request_password(std::shared_ptr<const Chat> chat) const noexcept {
 
     json js_body;
-    js_body["chat_id"]      = chat->chat_id;
+    js_body["chat_id"]      = chat->id;
     js_body["text"]         = std::format("{}\nВведите пароль:", find_command_text(Commands::Password));
     js_body["reply_markup"] = {{"force_reply", true}};
 
@@ -578,7 +578,7 @@ TelegramRequest TelegramController::prepare_request_text(std::shared_ptr<const C
     constexpr std::string_view url = "/bot{}/sendMessage";
 
     json js_body;
-    js_body["chat_id"]      = chat->chat_id;
+    js_body["chat_id"]      = chat->id;
     js_body["text"]         = msg;
     js_body["parse_mode"]   = "HTML";
     js_body["reply_markup"] = {{"remove_keyboard", true}};
@@ -591,7 +591,7 @@ TelegramRequest TelegramController::prepare_request_text(std::shared_ptr<const C
     request.url          = std::format(url, m_token);
     request.body         = js_body.dump();
     request.content_type = "application/json";
-    request.chat_id      = chat->chat_id;
+    request.chat_id      = chat->id;
 
     return request;
 }
@@ -611,7 +611,7 @@ TelegramRequest TelegramController::prepare_request_json(std::shared_ptr<const C
     request.url          = std::format(url, m_token);
     request.body         = js_body.dump();
     request.content_type = "application/json";
-    request.chat_id      = chat->chat_id;
+    request.chat_id      = chat->id;
 
     return request;
 }

@@ -12,11 +12,11 @@
  */
 void MemoryStorage::create_chat(const Chat& chat) {
 
-    if (m_data.contains(chat.chat_id)) {
-        throw std::logic_error(std::format("chat already exists. chat_id: {}", chat.chat_id));
+    if (m_data.contains(chat.id)) {
+        throw std::logic_error(std::format("chat already exists. chat_id: {}", chat.id));
     }
 
-    m_data[chat.chat_id] = chat;
+    m_data[chat.id] = chat;
 }
 //----------------------------------------------------------------------------------------------------------------------
 

@@ -23,13 +23,13 @@ Cache::Cache(std::unique_ptr<IStorage> storage)
 */
 IRepository::ChatResult Cache::create_chat(const Chat& chat) noexcept {
 
-    if (chat.chat_id == 0 || chat.username.empty()) {
+    if (chat.id == 0 || chat.username.empty()) {
         return std::unexpected(Errors::Repository::InvalidChat);
     }
 
     { //: Проверка наличия такого чата
         std::shared_lock lock(m_mutex);
-        if (m_cache_data.contains(chat.chat_id)) {
+        if (m_cache_data.contains(chat.id)) {
             return std::unexpected(Errors::Repository::AlreadyExists);
         }
     }
@@ -42,15 +42,15 @@ IRepository::ChatResult Cache::create_chat(const Chat& chat) noexcept {
     } catch (const std::logic_error& ex) {
         return std::unexpected(Errors::Repository::AlreadyExists);
     } catch (const std::exception& ex) {
-        log_error("failed create chat in storage: {}. chat_id = {}", ex.what(), chat.chat_id);
+        log_error("failed create chat in storage: {}. chat_id = {}", ex.what(), chat.id);
         return std::unexpected(Errors::Repository::Internal);
     }
 
     //: Добавление в кэш
     try {
-        return refresh(chat.chat_id);
+        return refresh(chat.id);
     } catch (const std::exception& ex) {
-        log_error("failed refresh chat in cache. chat_id = {}, error: {}", chat.chat_id, ex.what());
+        log_error("failed refresh chat in cache. chat_id = {}, error: {}", chat.id, ex.what());
         return std::unexpected(Errors::Repository::Internal);
     }
 }
@@ -360,7 +360,7 @@ std::vector<std::shared_ptr<Chat>> Cache::append(const std::vector<int64_t>& cha
 
         auto chat_ptr = std::make_shared<Chat>(std::move(chat));
 
-        m_cache_data[chat.chat_id] = chat_ptr;
+        m_cache_data[chat.id] = chat_ptr;
         chats.push_back(chat_ptr);
     }
 
@@ -384,7 +384,7 @@ std::shared_ptr<Chat> Cache::refresh(int64_t chat_id) {
 
     auto chat = std::make_shared<Chat>(std::move(res_final.value()));
 
-    m_cache_data[chat->chat_id] = chat;
+    m_cache_data[chat->id] = chat;
     return chat;
 }
 //----------------------------------------------------------------------------------------------------------------------

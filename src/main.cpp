@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
         TelegramSenderFactory::configure(cfg.m_tg_host_port, cfg.m_tg_token);
 
         m_memory_storage = std::make_unique<MemoryStorage>();
-        m_db_storage     = std::make_unique<DatabaseStorage>("db");
+        m_db_storage     = std::make_unique<DatabaseStorage>("db.sqlite3");
         m_cache          = std::make_shared<Cache>(std::move(m_memory_storage));
 
         m_tg_manager   = std::make_shared<TelegramManager>(cfg.m_tg_host_port, cfg.m_tg_token, cfg.m_tg_timeout, m_cache);

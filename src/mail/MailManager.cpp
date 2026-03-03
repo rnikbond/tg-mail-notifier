@@ -89,7 +89,7 @@ void MailManager::scan_mails() {
         for (const Email& email : chat->emails | std::views::values) {
 
             if (!email.ok()) {
-                log_info("mail is not ready for scan. chat_id={}, email={}, last_UID={}", chat->chat_id, email.address, email.last_uid);
+                log_info("mail is not ready for scan. chat_id={}, email={}, last_UID={}", chat->id, email.address, email.last_uid);
                 continue;
             }
 
@@ -97,7 +97,7 @@ void MailManager::scan_mails() {
             auto uids_res = mail_loader->load_uids(email);
             if (!uids_res.has_value()) {
                 log_error("failed load new mail UIDs. chat_id={}, email={}, last_UID={}, error: {}",
-                          chat->chat_id,
+                          chat->id,
                           email.address,
                           email.last_uid,
                           Errors::to_string(uids_res.error()));
@@ -109,7 +109,7 @@ void MailManager::scan_mails() {
             std::erase_if(uids, [uid_now = email.last_uid](int64_t uid) { return uid <= uid_now; });
 
             if (uids.empty()) {
-                log_info("no new mail msg on the email. chat_id={}, email={}, last_UID={}", chat->chat_id, email.address, email.last_uid);
+                log_info("no new mail msg on the email. chat_id={}, email={}, last_UID={}", chat->id, email.address, email.last_uid);
                 continue;
             }
 
@@ -119,17 +119,13 @@ void MailManager::scan_mails() {
 
                 auto msg_res = mail_loader->fetch_email(email, uid);
                 if (!msg_res.has_value()) {
-                    log_error("failed fetch mail msg. chat_id={}, email={}, UID={}, error: ",
-                              chat->chat_id,
-                              email.address,
-                              uid,
-                              Errors::to_string(msg_res.error()));
+                    log_error("failed fetch mail msg. chat_id={}, email={}, UID={}, error: ", chat->id, email.address, uid, Errors::to_string(msg_res.error()));
                     continue;
                 }
 
-                log_info("send mail msg in telegram. chat_id:={}, email={}, UID={}", chat->chat_id, email.address, uid);
+                log_info("send mail msg in telegram. chat_id:={}, email={}, UID={}", chat->id, email.address, uid);
 
-                tg_sender->send_msg(chat->chat_id, std::move(msg_res.value()));
+                tg_sender->send_msg(chat->id, std::move(msg_res.value()));
                 last_uid = uid;
             }
 
@@ -137,11 +133,11 @@ void MailManager::scan_mails() {
                 continue;
             }
 
-            auto res = m_repo->update_email_uid(chat->chat_id, email.id, last_uid);
+            auto res = m_repo->update_email_uid(chat->id, email.id, last_uid);
             if (res.has_value()) {
-                log_info("last mail uid success updated. chat_id:={}, email={}, last_UID={}", chat->chat_id, email.address, last_uid);
+                log_info("last mail uid success updated. chat_id:={}, email={}, last_UID={}", chat->id, email.address, last_uid);
             } else {
-                log_error("failed update email last uid. chat_id:={}, email={}, error: {}", chat->chat_id, email.address, Errors::to_string(res.error()));
+                log_error("failed update email last uid. chat_id:={}, email={}, error: {}", chat->id, email.address, Errors::to_string(res.error()));
             }
         }
     }
