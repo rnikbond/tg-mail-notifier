@@ -28,6 +28,7 @@ private:
 private:
 
     void apply_migrations();
+    void apply_migration(int migration_ver, const std::string& sql);
 
     int db_version();
     bool set_db_version(int version);

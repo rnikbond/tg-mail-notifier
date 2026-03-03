@@ -1,4 +1,6 @@
 //----------------------------------------------------------
+#include <charconv>
+//----------------------------------------------------------
 #include <sqlite3.h>
 //----------------------------------------------------------
 #include "generated_migrations.h"
@@ -6,6 +8,8 @@
 #include "logger.h"
 //----------------------------------------------------------
 #include "DatabaseStorage.h"
+//----------------------------------------------------------
+#define LATEST_DB_VERSION 1
 //----------------------------------------------------------
 
 void DatabaseStorage::SQLiteDeleter::operator()(sqlite3* db) const {
@@ -15,31 +19,114 @@ void DatabaseStorage::SQLiteDeleter::operator()(sqlite3* db) const {
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-/*!
+/**
  * @brief Конструктор класса
  * @param db_name Имя базы данных
+ * 
+ * @throw std::runtime_error Выбрасывается, если:
+ * - Не удалось подключиться в БД
+ * - Не удалось накатить миграции
  */
 DatabaseStorage::DatabaseStorage(const char* db_name) {
 
-    // sqlite3* db_raw;
-    // int      err = sqlite3_open(db_name, &db_raw);
-    // if (err != SQLITE_OK) {
-    //     sqlite3_close(db_raw);
-    //     throw std::runtime_error(std::format("failed database connection: db_name={}, error: {}", db_name, sqlite3_errmsg(db_raw)));
-    // }
+    sqlite3* db_raw;
+    int      err = sqlite3_open(db_name, &db_raw);
+    if (err != SQLITE_OK) {
+        sqlite3_close(db_raw);
+        throw std::runtime_error(std::format("failed database connection: db_name={}, error: {}", db_name, sqlite3_errmsg(db_raw)));
+    }
 
-    // m_db.reset(db_raw);
+    m_db.reset(db_raw);
     apply_migrations();
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-/*!
+/**
  * @brief Применение миграций базы данных
  */
 void DatabaseStorage::apply_migrations() {
 
+    int version = db_version();
+    if (LATEST_DB_VERSION == version) {
+        log_info("database is up to date. version: {}", version);
+        return;
+    }
+
+    log_info("database is outdated. version: {}, latest: {}", version, LATEST_DB_VERSION);
+
     for (const auto& [name, sql] : migration_files) {
-        log_info("rcc sql file: {}", name);
+
+        if (!name.ends_with(".up.sql")) {
+            continue;
+        }
+
+        int migration_ver = 0;
+
+        { //: Парсим имя файла, чтоб получить версию
+            size_t pos = name.find("_");
+            if (pos == std::string::npos) {
+                log_error("invalid migration: {}", name);
+                break;
+            }
+
+            auto [_, err] = std::from_chars(name.data(), name.data() + pos, migration_ver);
+            if (err != std::errc()) {
+                log_error("invalid migration: {}", name);
+                break;
+            }
+        }
+
+        if (migration_ver <= version) {
+            continue;
+        }
+
+        log_info("applying migration : {}", name);
+        apply_migration(migration_ver, sql);
+        log_info("migration successfully applied. migration: {}", name);
+
+        if (migration_ver == LATEST_DB_VERSION) {
+            break;
+        }
+    }
+
+    version = db_version();
+    if (LATEST_DB_VERSION == version) {
+        log_info("database is up to date. version: {}", version);
+    } else {
+        throw std::runtime_error(std::format("database is not up to date. version: {}, latest: {}", version, LATEST_DB_VERSION));
+    }
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief DatabaseStorage::apply_migration
+ * @param migration_ver Версия миграции
+ * @param sql           SQL запрос
+ * 
+ * @throw std::runtime_error Выбрасывается в случае ошибки при применении миграции
+ */
+void DatabaseStorage::apply_migration(int migration_ver, const std::string& sql) {
+
+    int err = sqlite3_exec(m_db.get(), "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+    if (err != SQLITE_OK) {
+        throw std::runtime_error(std::format("BEGIN TRANSACTION failed. migration={}", migration_ver));
+    }
+
+    err = sqlite3_exec(m_db.get(), sql.c_str(), nullptr, nullptr, nullptr);
+    if (err != SQLITE_OK) {
+        std::string text = std::format("sql exec failed. migration={}", migration_ver);
+        throw std::runtime_error(text);
+    }
+
+    bool ok = set_db_version(migration_ver);
+    if (!ok) {
+        throw std::runtime_error(std::format("change db version failed. migration: {}", migration_ver));
+    }
+
+    err = sqlite3_exec(m_db.get(), "COMMIT;", nullptr, nullptr, nullptr);
+    if (err != SQLITE_OK) {
+        std::string text = std::format("COMMIT failed. migration={}", migration_ver);
+        throw std::runtime_error(text);
     }
 }
 //----------------------------------------------------------------------------------------------------------------------

@@ -45,9 +45,20 @@ struct TimeImterval
 /**
  * @brief Структура, описывающая настройки чата
  */
-struct ChatSettings
+struct ChatExt
 {
     TimeImterval silent_interval; ///< Интервал, когда сообщения должны приходить без звука
+};
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Структура, 
+ */
+struct EmailExt
+{
+    std::set<std::string> addr_filter_rules;  ///< Фильтры по отправителям. Например: {"info@service.ru", "*@sales.ru"}
+    std::set<std::string> title_filter_rules; ///< Фильтры по заголовку письма
+    std::set<std::string> body_filter_rules;  ///< Фильтры по телу письма
 };
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -56,13 +67,11 @@ struct ChatSettings
  */
 struct Email
 {
-    int64_t               id = {-1};          ///< Идентификатор записи
-    std::string           address;            ///< Адрес. Например: "ololoev@mail.ru"
-    std::string           password;           ///< Пароль для подключения к почте
-    std::set<std::string> addr_filter_rules;  ///< Фильтры по отправителям. Например: {"info@service.ru", "*@sales.ru"}
-    std::set<std::string> title_filter_rules; ///< Фильтры по заголовку письма
-    std::set<std::string> body_filter_rules;  ///< Фильтры по телу письма
-    int64_t               last_uid = {-1};
+    int64_t     id = {-1};       ///< Идентификатор записи
+    std::string address;         ///< Адрес. Например: "ololoev@mail.ru"
+    std::string password;        ///< Пароль для подключения к почте
+    int64_t     last_uid = {-1}; ///< UID последнего обработанного письма
+    EmailExt    extensions;      ///< Доп. настройки почты
 
     /// @brief Пороверка корректности почты
     bool ok() const {
@@ -80,7 +89,7 @@ struct Chat
     std::string  username;     ///< Логин из telegram
     std::string  first_name;   ///< Имя пользователя из telegram
     std::string  last_name;    ///< Фамилия пользователя из telegram
-    ChatSettings settings;     ///< Настройки чата
+    ChatExt      extensions;   ///< Доп. настройки чата
 
     std::unordered_map<int64_t, Email> emails; ///< <email_id, Email> Данные об электронной почте
 };
