@@ -7,6 +7,7 @@
 #include "cache/Cache.h"
 #include "core/Config.h"
 #include "mail/MailManager.h"
+#include "storage/database/DatabaseStorage.h"
 #include "storage/memory/MemoryStorage.h"
 #include "telegram/TelegramManager.h"
 #include "telegram/TelegramSenderFactory.h"
@@ -24,17 +25,22 @@ int main(int argc, char **argv) {
         log_warn({"telegram session timeout == 0"});
     }
 
-    std::unique_ptr<MemoryStorage>   m_storage;
+    std::unique_ptr<MemoryStorage>   m_memory_storage;
+    std::unique_ptr<DatabaseStorage> m_db_storage;
     std::shared_ptr<Cache>           m_cache;
     std::shared_ptr<TelegramManager> m_tg_manager;
     std::shared_ptr<MailManager>     m_mail_manager;
+
+    //m_db_storage = std::make_unique<DatabaseStorage>("db");
+    //return 0;
 
     try {
 
         TelegramSenderFactory::configure(cfg.m_tg_host_port, cfg.m_tg_token);
 
-        m_storage = std::make_unique<MemoryStorage>();
-        m_cache   = std::make_shared<Cache>(std::move(m_storage));
+        m_memory_storage = std::make_unique<MemoryStorage>();
+        //m_db_storage     = std::make_unique<DatabaseStorage>("db");
+        m_cache          = std::make_shared<Cache>(std::move(m_memory_storage));
 
         m_tg_manager   = std::make_shared<TelegramManager>(cfg.m_tg_host_port, cfg.m_tg_token, cfg.m_tg_timeout, m_cache);
         m_mail_manager = std::make_shared<MailManager>(m_cache);

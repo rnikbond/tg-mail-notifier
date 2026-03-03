@@ -44,6 +44,7 @@ set(SOURCES
     src/core/Config.h                    src/core/Config.cpp
     src/cache/Cache.h                    src/cache/Cache.cpp
     src/storage/memory/MemoryStorage.h   src/storage/memory/MemoryStorage.cpp
+    src/storage/database/DatabaseStorage.h src/storage/database/DatabaseStorage.cpp
     src/telegram/TelegramManager.h       src/telegram/TelegramManager.cpp
     src/mail/MailManager.h               src/mail/MailManager.cpp
     src/mail/MailRequest.h               src/mail/MailRequest.cpp
@@ -59,6 +60,10 @@ add_executable(tg-mail-notifier
     ${SOURCES}
 )
 
+## Подключение миграций
+add_subdirectory(migrations)
+target_link_libraries(tg-mail-notifier migrations_interface)
+
 ## Добавление доп. библиотек
 target_link_libraries(tg-mail-notifier spdlog::spdlog)
 target_link_libraries(tg-mail-notifier CLI11::CLI11)
@@ -68,4 +73,5 @@ target_link_libraries(tg-mail-notifier CURL::libcurl)
 target_link_libraries(tg-mail-notifier ${GMIME_LIBRARIES})
 target_link_libraries(tg-mail-notifier SQLite::SQLite3)
 
+## Подключение тестов
 #add_subdirectory(tests)
