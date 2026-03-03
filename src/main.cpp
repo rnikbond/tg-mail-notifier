@@ -25,22 +25,34 @@ int main(int argc, char **argv) {
         log_warn({"telegram session timeout == 0"});
     }
 
+    if (cfg.m_storage == Config::StorageTypes::Database) {
+        if (cfg.m_db_dsn.empty()) {
+            log_error("DSN is empty");
+            return 1;
+        }
+    }
+
+    TelegramSenderFactory::configure(cfg.m_tg_host_port, cfg.m_tg_token);
+
     std::unique_ptr<MemoryStorage>   m_memory_storage;
     std::unique_ptr<DatabaseStorage> m_db_storage;
     std::shared_ptr<Cache>           m_cache;
     std::shared_ptr<TelegramManager> m_tg_manager;
     std::shared_ptr<MailManager>     m_mail_manager;
 
-    //m_db_storage = std::make_unique<DatabaseStorage>("db.sqlite3");
-    //return 0;
-
     try {
-
-        TelegramSenderFactory::configure(cfg.m_tg_host_port, cfg.m_tg_token);
-
-        m_memory_storage = std::make_unique<MemoryStorage>();
-        m_db_storage     = std::make_unique<DatabaseStorage>("db.sqlite3");
-        m_cache          = std::make_shared<Cache>(std::move(m_memory_storage));
+        switch (cfg.m_storage) {
+            case Config::StorageTypes::Database:
+                log_info("used database as storage");
+                m_db_storage = std::make_unique<DatabaseStorage>(cfg.m_db_dsn);
+                m_cache      = std::make_shared<Cache>(std::move(m_memory_storage));
+                break;
+            default:
+                log_info("used memory as storage");
+                m_memory_storage = std::make_unique<MemoryStorage>();
+                m_cache          = std::make_shared<Cache>(std::move(m_memory_storage));
+                break;
+        }
 
         m_tg_manager   = std::make_shared<TelegramManager>(cfg.m_tg_host_port, cfg.m_tg_token, cfg.m_tg_timeout, m_cache);
         m_mail_manager = std::make_shared<MailManager>(m_cache);

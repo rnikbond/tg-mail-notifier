@@ -29,6 +29,11 @@ Config &Config::get_instance() {
  */
 void Config::parse(int argc, char **argv, const std::string &path) {
 
+    std::map<std::string, StorageTypes> allowed_storage_types = {
+        {"memory", StorageTypes::InMemory},
+        {"db", StorageTypes::Database},
+    };
+
     CLI::App app{"Телеграм бот для получения уведомлений об email"};
     app.set_config("--config", path);
 
@@ -37,6 +42,13 @@ void Config::parse(int argc, char **argv, const std::string &path) {
     tg->add_option("--tg-token", m_tg_token, "Токен telegram бот");
     tg->add_option("--tg-host-port", m_tg_host_port, "URL telegram сервера");
     tg->add_option("--tg-timeout", m_tg_timeout, "Время удержания сессии с telegram");
+
+    //: Секция [db]
+    auto storage = app.add_option_group("storage", "Хранилище");
+    storage->add_option("--storage-type", m_storage, "Тип хранилища: 0 - в памяти, 1 - база данных")
+        ->transform(CLI::CheckedTransformer(allowed_storage_types, CLI::ignore_case))
+        ->default_val(m_storage);
+    storage->add_option("--db-dsn", m_db_dsn, "Строка подключения к базе данных")->default_val(m_db_dsn);
 
     //: Секция [log]
     auto log = app.add_option_group("log", "Логирование");

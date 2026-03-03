@@ -21,19 +21,19 @@ void DatabaseStorage::SQLiteDeleter::operator()(sqlite3* db) const {
 
 /**
  * @brief Конструктор класса
- * @param db_name Имя базы данных
+ * @param dsn Строка подключения к БД (Data Source Name)
  * 
  * @throw std::runtime_error Выбрасывается, если:
  * - Не удалось подключиться в БД
  * - Не удалось накатить миграции
  */
-DatabaseStorage::DatabaseStorage(const char* db_name) {
+DatabaseStorage::DatabaseStorage(const std::string& dsn) {
 
     sqlite3* db_raw;
-    int      err = sqlite3_open(db_name, &db_raw);
+    int      err = sqlite3_open(dsn.c_str(), &db_raw);
     if (err != SQLITE_OK) {
         sqlite3_close(db_raw);
-        throw std::runtime_error(std::format("failed database connection: db_name={}, error: {}", db_name, sqlite3_errmsg(db_raw)));
+        throw std::runtime_error(std::format("failed database connection: DSN={}, error: {}", dsn, sqlite3_errmsg(db_raw)));
     }
 
     m_db.reset(db_raw);

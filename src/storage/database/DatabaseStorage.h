@@ -13,7 +13,7 @@ struct sqlite3;
 class DatabaseStorage {
 public:
 
-    DatabaseStorage(const char* db_name);
+    DatabaseStorage(const std::string& dsn);
     ~DatabaseStorage() = default;
 
 private:

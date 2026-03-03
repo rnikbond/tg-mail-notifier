@@ -25,9 +25,18 @@ public:
 
 public:
 
+    /// @brief Типы хранилищ
+    enum class StorageTypes {
+        InMemory, ///< В памяти
+        Database, ///< База данных
+    };
+
     std::string m_tg_host_port = {"https://api.telegram.org"};
     std::string m_tg_token;
     size_t      m_tg_timeout = {};
+
+    StorageTypes m_storage = {StorageTypes::InMemory};
+    std::string  m_db_dsn  = {"db.sqlite3"};
 
     std::string m_log_path  = {"tg-mail-notifier.log"};
     std::string m_log_level = {"warn"};
