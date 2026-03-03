@@ -1,5 +1,6 @@
 //----------------------------------------------------------
 #include <charconv>
+#include <ranges>
 //----------------------------------------------------------
 #include <sqlite3.h>
 //----------------------------------------------------------
@@ -44,8 +45,76 @@ DatabaseStorage::DatabaseStorage(const std::string& dsn) {
 /**
  * @brief Создание нового чата
  * @param chat Данные чата
+ * 
+ * @throw std::runtime_error Выбрасывается в случае ошибки выполнения SQL запроса
  */
 void DatabaseStorage::create_chat(const Chat& chat) {
+
+    constexpr const char* sql_insert_chats = R"(INSERT INTO chats VALUES(?, ?, ?, ?);)";
+    constexpr const char* sql_insert_email = R"(INSERT INTO emails VALUES(?, ?, ?, ?, ?);)";
+
+    int err = sqlite3_exec(m_db.get(), "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+    if (err != SQLITE_OK) {
+        throw std::runtime_error(std::format("failed begin transaction. sql error: {}", sqlite3_errmsg(m_db.get())));
+    }
+
+    auto deleter = [](sqlite3_stmt* stmt) { sqlite3_finalize(stmt); };
+
+    std::unique_ptr<sqlite3_stmt, decltype(deleter)> stmt_chats;
+
+    {
+        sqlite3_stmt* stmt_chats_raw;
+        err = sqlite3_prepare_v2(m_db.get(), sql_insert_chats, -1, &stmt_chats_raw, nullptr);
+
+        stmt_chats.reset(stmt_chats_raw);
+        if (err != SQLITE_OK) {
+            throw std::runtime_error(std::format("failed prepare chats. sql error: {}", sqlite3_errmsg(m_db.get())));
+        }
+    }
+
+    //: Вставка в chats
+    sqlite3_bind_int64(stmt_chats.get(), 1, chat.id);                             //: id
+    sqlite3_bind_text(stmt_chats.get(), 2, chat.username.c_str(), -1, nullptr);   //: username
+    sqlite3_bind_text(stmt_chats.get(), 3, chat.first_name.c_str(), -1, nullptr); //: first_name
+    sqlite3_bind_text(stmt_chats.get(), 4, chat.last_name.c_str(), -1, nullptr);  //: last_name
+    if (sqlite3_step(stmt_chats.get()) != SQLITE_DONE) {
+        throw std::runtime_error(std::format("failed insert chat. sql error: {}", sqlite3_errmsg(m_db.get())));
+    }
+
+    if (!chat.emails.empty()) {
+
+        std::unique_ptr<sqlite3_stmt, decltype(deleter)> stmt_emails;
+
+        {
+            sqlite3_stmt* stmt_emails_raw;
+            err = sqlite3_prepare_v2(m_db.get(), sql_insert_email, -1, &stmt_emails_raw, nullptr);
+
+            stmt_emails.reset(stmt_emails_raw);
+            if (err != SQLITE_OK) {
+                throw std::runtime_error(std::format("failed prepare emails. sql error: {}", sqlite3_errmsg(m_db.get())));
+            }
+        }
+
+        //: Вставка email
+        for (const auto& email : chat.emails | std::views::values) {
+            sqlite3_bind_null(stmt_emails.get(), 1);                                      //: id
+            sqlite3_bind_int64(stmt_emails.get(), 2, chat.id);                            //: chat_id
+            sqlite3_bind_text(stmt_emails.get(), 3, email.address.c_str(), -1, nullptr);  //: address
+            sqlite3_bind_text(stmt_emails.get(), 4, email.password.c_str(), -1, nullptr); //: password
+            sqlite3_bind_int64(stmt_emails.get(), 5, email.last_uid);                     //: last_uid
+
+            if (sqlite3_step(stmt_emails.get()) != SQLITE_DONE) {
+                throw std::runtime_error(std::format("failed insert email. sql error: {}", sqlite3_errmsg(m_db.get())));
+            }
+
+            sqlite3_reset(stmt_emails.get());
+        }
+    }
+
+    err = sqlite3_exec(m_db.get(), "COMMIT;", nullptr, nullptr, nullptr);
+    if (err != SQLITE_OK) {
+        throw std::runtime_error(std::format("failed commit. sql error: {}", sqlite3_errmsg(m_db.get())));
+    }
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -55,7 +124,41 @@ void DatabaseStorage::create_chat(const Chat& chat) {
  * @return Данные чата, если он найден
  */
 std::optional<Chat> DatabaseStorage::find_chat(int64_t chat_id) const noexcept {
-    return std::nullopt;
+
+    constexpr const char* sql = "SELECT * FROM chats WHERE id = ?;";
+
+    auto deleter = [](sqlite3_stmt* stmt) { sqlite3_finalize(stmt); };
+
+    std::unique_ptr<sqlite3_stmt, decltype(deleter)> stmt;
+
+    sqlite3_stmt* stmt_raw;
+    int           err = sqlite3_prepare_v2(m_db.get(), sql, -1, &stmt_raw, nullptr);
+
+    stmt.reset(stmt_raw);
+    if (err != SQLITE_OK) {
+        log_error("sql error: {}", sqlite3_errmsg(m_db.get()));
+        return std::nullopt;
+    }
+
+    sqlite3_bind_int64(stmt.get(), 1, chat_id);
+    if (sqlite3_step(stmt.get()) != SQLITE_ROW) {
+        return std::nullopt;
+    }
+
+    auto set_text = [](sqlite3_stmt* stmt, int col, std::string& dest) {
+        const unsigned char* text_raw = sqlite3_column_text(stmt, col);
+        if (text_raw) {
+            dest = reinterpret_cast<const char*>(text_raw);
+        }
+    };
+
+    Chat chat;
+    chat.id = sqlite3_column_int64(stmt.get(), 0);
+    set_text(stmt.get(), 1, chat.username);
+    set_text(stmt.get(), 2, chat.first_name);
+    set_text(stmt.get(), 3, chat.last_name);
+
+    return chat;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -76,7 +179,29 @@ std::vector<Chat> DatabaseStorage::find_chats(const std::vector<int64_t>& chat_i
  * @return Список идентификаторов чатов
  */
 std::vector<int64_t> DatabaseStorage::chat_ids() const noexcept {
-    return {};
+
+    constexpr const char* sql = R"(SELECT id FROM chats;)";
+
+    auto deleter = [](sqlite3_stmt* stmt) { sqlite3_finalize(stmt); };
+
+    std::unique_ptr<sqlite3_stmt, decltype(deleter)> stmt;
+
+    sqlite3_stmt* stmt_raw;
+    int           err = sqlite3_prepare_v2(m_db.get(), sql, -1, &stmt_raw, nullptr);
+    stmt.reset(stmt_raw);
+
+    if (err != SQLITE_OK) {
+        log_error("sql error: {}", sqlite3_errmsg(m_db.get()));
+        return {};
+    }
+
+    std::vector<int64_t> ids;
+    while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
+        int64_t chat_id = sqlite3_column_int64(stmt.get(), 0);
+        ids.push_back(chat_id);
+    }
+
+    return ids;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
