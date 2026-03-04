@@ -58,6 +58,7 @@ set(SOURCES
 add_executable(tg-mail-notifier
     ${INCLUDES}
     ${SOURCES}
+    src/core/PasswordCryptor.h src/core/PasswordCryptor.cpp
 )
 
 ## Подключение миграций
