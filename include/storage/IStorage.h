@@ -21,14 +21,14 @@ public:
      * @brief Создание нового чата
      * @param chat Данные чата
      */
-    virtual void create_chat(const Chat& chat) = 0;
+    virtual void create_chat(const ChatCipher& chat) = 0;
 
     /**
      * @brief Поиск чата
      * @param chat_id Идентификатор чата
      * @return Данные чата, если он найден
      */
-    [[nodiscard]] virtual std::optional<Chat> find_chat(int64_t chat_id) const noexcept = 0;
+    [[nodiscard]] virtual std::optional<ChatCipher> find_chat(int64_t chat_id) const noexcept = 0;
 
     /**
      * @brief Поиск чатов
@@ -37,7 +37,7 @@ public:
      * 
      * Если какие-либо чаты не найдены, вернётся список только найденных
      */
-    [[nodiscard]] virtual std::vector<Chat> find_chats(const std::vector<int64_t>& chat_ids) const noexcept = 0;
+    [[nodiscard]] virtual std::vector<ChatCipher> find_chats(const std::vector<int64_t>& chat_ids) const noexcept = 0;
 
     /**
      * @brief Получение идетнификторов всех чатов
@@ -47,16 +47,17 @@ public:
 
     /**
      * @brief Добавление новой почты
-     * @param chat_id Идентификатор чата
-     * @param email   Данные электронной почты
+     * @param chat_id    Идентификатор чата
+     * @param email      Данные электронной почты
      */
-    virtual void append_email(int64_t chat_id, const Email& email) = 0;
+    virtual void append_email(int64_t chat_id, const EmailCipher& email) = 0;
 
     /**
      * @brief Обновление данных об электронной почте
-     * @param chat Данные чата
+     * @param chat_id    Идентификатор чата
+     * @param email      Данные электронной почты
      */
-    virtual void update_email(int64_t chat_id, const Email& email) = 0;
+    virtual void update_email(int64_t chat_id, const EmailCipher& email) = 0;
 
     /**
      * @brief Удаление данных об электронной почте

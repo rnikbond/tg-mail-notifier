@@ -38,6 +38,9 @@ public:
     StorageTypes m_storage = {StorageTypes::InMemory};
     std::string  m_db_dsn  = {"db.sqlite3"};
 
+    std::string m_cipher_key;
+    std::string m_cipher_salt;
+
     std::string m_log_path  = {"tg-mail-notifier.log"};
     std::string m_log_level = {"warn"};
 };

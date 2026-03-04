@@ -4,6 +4,8 @@
 //----------------------------------------------------------
 #include "logger.h"
 //----------------------------------------------------------
+#include "../core/PasswordCryptor.h"
+//----------------------------------------------------------
 #include "Cache.h"
 //----------------------------------------------------------
 
@@ -39,7 +41,8 @@ IRepository::ChatResult Cache::create_chat(const Chat& chat) noexcept {
 
     //: Создание в хранилище
     try {
-        m_storage->create_chat(chat);
+        auto chat_cipher = convert_chat_to_cipher(chat);
+        m_storage->create_chat(chat_cipher);
     } catch (const std::logic_error& ex) {
         return std::unexpected(Errors::Repository::AlreadyExists);
     } catch (const std::exception& ex) {
@@ -81,10 +84,11 @@ IRepository::ChatResult Cache::find_chat(int64_t chat_id) noexcept {
         return std::unexpected(Errors::Repository::NotFound);
     }
 
-    auto chat = std::make_shared<Chat>(std::move(chat_opt.value()));
+    auto chat     = convert_chat_from_cipher(chat_opt.value());
+    auto chat_ptr = std::make_shared<Chat>(std::move(chat));
 
-    m_cache_data[chat_id] = chat;
-    return chat;
+    m_cache_data[chat_id] = chat_ptr;
+    return chat_ptr;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -180,7 +184,8 @@ IRepository::ChatResult Cache::append_email(int64_t chat_id, const Email& email)
     }
 
     try {
-        m_storage->append_email(chat_id, email);
+        auto email_cipher = convert_email_to_cipher(email);
+        m_storage->append_email(chat_id, email_cipher);
     } catch (const std::out_of_range& ex) {
         return std::unexpected(Errors::Repository::AlreadyExists);
     } catch (const std::exception& ex) {
@@ -229,7 +234,8 @@ IRepository::ChatResult Cache::update_email(int64_t chat_id, const Email& email)
     }
 
     try {
-        m_storage->update_email(chat_id, email);
+        auto email_cipher = convert_email_to_cipher(email);
+        m_storage->update_email(chat_id, email_cipher);
     } catch (const std::out_of_range& ex) {
         return std::unexpected(Errors::Repository::NotFound);
     } catch (const std::exception& ex) {
@@ -281,10 +287,11 @@ IRepository::ChatResult Cache::update_email_uid(int64_t chat_id, int64_t email_i
         return it->second;
     }
 
-    it_email->second.last_uid = uid;
+    email.last_uid = uid;
 
     try {
-        m_storage->update_email(chat_id, email);
+        auto email_cipher = convert_email_to_cipher(email);
+        m_storage->update_email(chat_id, email_cipher);
     } catch (const std::out_of_range& ex) {
         return std::unexpected(Errors::Repository::NotFound);
     } catch (const std::exception& ex) {
@@ -338,7 +345,8 @@ void Cache::reload_from_storage() {
 
     auto ids   = m_storage->chat_ids();
     auto chats = m_storage->find_chats(ids);
-    for (Chat& chat : chats) {
+    for (ChatCipher& chat_cipher : chats) {
+        auto chat = convert_chat_from_cipher(chat_cipher);
         m_cache_data.emplace(chat.id, std::make_shared<Chat>(std::move(chat)));
     }
 }
@@ -355,7 +363,9 @@ std::unordered_map<int64_t, std::shared_ptr<Chat>>::iterator Cache::append(int64
     if (!chat_opt) {
         return m_cache_data.end();
     }
-    auto chat_ptr = std::make_shared<Chat>(std::move(chat_opt.value()));
+
+    auto chat     = convert_chat_from_cipher(chat_opt.value());
+    auto chat_ptr = std::make_shared<Chat>(std::move(chat));
     return m_cache_data.emplace_hint(m_cache_data.end(), chat_id, std::move(chat_ptr));
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -371,11 +381,12 @@ std::vector<std::shared_ptr<Chat>> Cache::append(const std::vector<int64_t>& cha
     chats.reserve(chat_ids.size());
 
     auto chats_storage = m_storage->find_chats(chat_ids);
-    for (Chat& chat : chats_storage) {
+    for (ChatCipher& chat_cipher : chats_storage) {
 
+        auto chat     = convert_chat_from_cipher(chat_cipher);
         auto chat_ptr = std::make_shared<Chat>(std::move(chat));
 
-        m_cache_data[chat.id] = chat_ptr;
+        m_cache_data[chat_ptr->id] = chat_ptr;
         chats.push_back(chat_ptr);
     }
 
@@ -392,15 +403,16 @@ std::vector<std::shared_ptr<Chat>> Cache::append(const std::vector<int64_t>& cha
  */
 std::shared_ptr<Chat> Cache::refresh(int64_t chat_id) {
 
-    auto res_final = m_storage->find_chat(chat_id);
-    if (!res_final) {
+    auto res_opt = m_storage->find_chat(chat_id);
+    if (!res_opt) {
         throw std::runtime_error(std::format("not found chat in storage. chat_id = {}", chat_id));
     }
 
-    auto chat = std::make_shared<Chat>(std::move(res_final.value()));
+    auto chat     = convert_chat_from_cipher(res_opt.value());
+    auto chat_ptr = std::make_shared<Chat>(std::move(chat));
 
-    m_cache_data[chat->id] = chat;
-    return chat;
+    m_cache_data[chat_ptr->id] = chat_ptr;
+    return chat_ptr;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -416,5 +428,98 @@ bool Cache::is_correct_email_addr(const std::string_view& addr) const noexcept {
     }
 
     return true;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Преобразование обычного чата в зашифрованный
+ * @param chat Обычный чат
+ * @return Зашифрованный чат
+ */
+ChatCipher Cache::convert_chat_to_cipher(const Chat& chat) const {
+
+    ChatCipher chat_cipher;
+    chat_cipher.id         = chat.id;
+    chat_cipher.username   = chat.username;
+    chat_cipher.first_name = chat.first_name;
+    chat_cipher.last_name  = chat.last_name;
+    chat_cipher.extensions = chat.extensions;
+
+    for (const auto& [email_id, email] : chat.emails) {
+        chat_cipher.emails[email_id] = std::move(convert_email_to_cipher(email));
+    }
+
+    return chat_cipher;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Преобразование зашифрованного чата в обычный
+ * @param chat_cipher Зашифрованный чат
+ * @return Обычный чат
+ */
+Chat Cache::convert_chat_from_cipher(const ChatCipher& chat_cipher) const {
+
+    Chat chat;
+    chat.id         = chat_cipher.id;
+    chat.username   = chat_cipher.username;
+    chat.first_name = chat_cipher.first_name;
+    chat.last_name  = chat_cipher.last_name;
+    chat.extensions = chat_cipher.extensions;
+    for (const auto& [email_id, email_cipher] : chat_cipher.emails) {
+        chat.emails[email_id] = std::move(convert_email_from_cipher(email_cipher));
+    }
+
+    return chat;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Преобразование обычного Email в зашифрованный
+ * @param email Обычный Email
+ * @return Зашифрованный Email
+ */
+EmailCipher Cache::convert_email_to_cipher(const Email& email) const {
+
+    EmailCipher email_cipher;
+    email_cipher.id         = email.id;
+    email_cipher.address    = email.address;
+    email_cipher.last_uid   = email.last_uid;
+    email_cipher.extensions = email.extensions;
+
+    try {
+        if (!email.password.empty()) {
+            email_cipher.password = PasswordCryptor::encrypt(email.password);
+        }
+    } catch (const std::exception& ex) {
+        log_error("failed encrypt email password. id={}, address={}, error: {}", email.id, email.password, ex.what());
+    }
+
+    return email_cipher;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief CПреобразование зашифрованного Email в обычный
+ * @param email_cipher Зашифрованный Email
+ * @return Обычный Email
+ */
+Email Cache::convert_email_from_cipher(const EmailCipher& email_cipher) const {
+
+    Email email;
+    email.id         = email_cipher.id;
+    email.address    = email_cipher.address;
+    email.last_uid   = email_cipher.last_uid;
+    email.extensions = email_cipher.extensions;
+
+    try {
+        if (!email_cipher.password.data.empty()) {
+            email.password = PasswordCryptor::decrypt(email_cipher.password);
+        }
+    } catch (const std::exception& ex) {
+        log_error("failed decrypt email password. id={}, address={}, error: {}", email.id, email.password, ex.what());
+    }
+
+    return email;
 }
 //----------------------------------------------------------------------------------------------------------------------

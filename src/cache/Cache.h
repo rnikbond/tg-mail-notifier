@@ -53,6 +53,11 @@ private:
 private:
 
     bool is_correct_email_addr(const std::string_view& addr) const noexcept;
+
+    ChatCipher convert_chat_to_cipher(const Chat& chat) const;
+    Chat convert_chat_from_cipher(const ChatCipher& chat_cipher) const;
+    EmailCipher convert_email_to_cipher(const Email& email) const;
+    Email convert_email_from_cipher(const EmailCipher& email_cipher) const;
 };
 //----------------------------------------------------------------------------------------------------------------------
 

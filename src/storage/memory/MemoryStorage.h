@@ -18,18 +18,18 @@ public:
 
 public:
 
-    virtual void create_chat(const Chat& chat) override;
-    virtual std::optional<Chat> find_chat(int64_t chat_id) const noexcept override;
-    virtual std::vector<Chat> find_chats(const std::vector<int64_t>& chat_ids) const noexcept override;
+    virtual void create_chat(const ChatCipher& chat) override;
+    virtual std::optional<ChatCipher> find_chat(int64_t chat_id) const noexcept override;
+    virtual std::vector<ChatCipher> find_chats(const std::vector<int64_t>& chat_ids) const noexcept override;
     virtual std::vector<int64_t> chat_ids() const noexcept override;
 
-    virtual void append_email(int64_t chat_id, const Email& email) override;
-    virtual void update_email(int64_t chat_id, const Email& email) override;
+    virtual void append_email(int64_t chat_id, const EmailCipher& email) override;
+    virtual void update_email(int64_t chat_id, const EmailCipher& email) override;
     virtual void delete_email(int64_t chat_id, int64_t id) override;
 
 private:
 
-    std::unordered_map<int64_t, Chat> m_data;
+    std::unordered_map<int64_t, ChatCipher> m_data;
 };
 //----------------------------------------------------------------------------------------------------------------------
 

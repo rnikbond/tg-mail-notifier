@@ -75,11 +75,16 @@ std::string PasswordCryptor::decrypt(const PasswordCipher& cipher) {
 
     std::string psw = std::string(plaintext.begin(), plaintext.end());
 
-    psw.resize(0, psw.length() - m_salt.length());
+    psw.resize(psw.size() - m_salt.size());
     return psw;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
+/**
+ * @brief Генерация вектора инициализации
+ * @param size Размер вектора
+ * @return Вектор инициализации для шифрования
+ */
 std::vector<uint8_t> PasswordCryptor::generate_iv(size_t size) {
     std::vector<uint8_t> iv(size);
     if (RAND_bytes(iv.data(), size) != 1) {
@@ -89,13 +94,14 @@ std::vector<uint8_t> PasswordCryptor::generate_iv(size_t size) {
 }
 //----------------------------------------------------------------------------------------------------------------------
 
-/*!
+/**
  * @brief Инициализация
  * @param key  Закрытый ключ шифрования
  * @param salt Соль
  */
-void PasswordCryptor::init(const std::vector<uint8_t>& key, const std::string& salt) {
+void PasswordCryptor::init(
+    const std::string& key, const std::string& salt) {
+    m_key.assign(key.begin(), key.end());
     m_salt = salt;
-    m_key  = key;
 }
 //----------------------------------------------------------------------------------------------------------------------

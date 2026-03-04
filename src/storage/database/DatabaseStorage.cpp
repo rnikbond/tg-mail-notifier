@@ -48,10 +48,10 @@ DatabaseStorage::DatabaseStorage(const std::string& dsn) {
  * 
  * @throw std::runtime_error Выбрасывается в случае ошибки выполнения SQL запроса
  */
-void DatabaseStorage::create_chat(const Chat& chat) {
+void DatabaseStorage::create_chat(const ChatCipher& chat) {
 
     constexpr const char* sql_insert_chats = R"(INSERT INTO chats VALUES(?, ?, ?, ?);)";
-    constexpr const char* sql_insert_email = R"(INSERT INTO emails VALUES(?, ?, ?, ?, ?);)";
+    constexpr const char* sql_insert_email = R"(INSERT INTO emails VALUES(?, ?, ?, ?, ?, ?, ?);)";
 
     int err = sqlite3_exec(m_db.get(), "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
     if (err != SQLITE_OK) {
@@ -96,12 +96,14 @@ void DatabaseStorage::create_chat(const Chat& chat) {
         }
 
         //: Вставка email
-        for (const auto& email : chat.emails | std::views::values) {
-            sqlite3_bind_null(stmt_emails.get(), 1);                                      //: id
-            sqlite3_bind_int64(stmt_emails.get(), 2, chat.id);                            //: chat_id
-            sqlite3_bind_text(stmt_emails.get(), 3, email.address.c_str(), -1, nullptr);  //: address
-            sqlite3_bind_text(stmt_emails.get(), 4, email.password.c_str(), -1, nullptr); //: password
-            sqlite3_bind_int64(stmt_emails.get(), 5, email.last_uid);                     //: last_uid
+        for (const EmailCipher& email : chat.emails | std::views::values) {
+            sqlite3_bind_null(stmt_emails.get(), 1);                                                                  //: id
+            sqlite3_bind_int64(stmt_emails.get(), 2, chat.id);                                                        //: chat_id
+            sqlite3_bind_text(stmt_emails.get(), 3, email.address.c_str(), -1, nullptr);                              //: address
+            sqlite3_bind_int64(stmt_emails.get(), 4, email.last_uid);                                                 //: last_uid
+            sqlite3_bind_blob(stmt_emails.get(), 5, email.password.data.data(), email.password.data.size(), nullptr); //: password
+            sqlite3_bind_blob(stmt_emails.get(), 6, email.password.iv.data(), email.password.iv.size(), nullptr);     //: password_iv
+            sqlite3_bind_blob(stmt_emails.get(), 7, email.password.tag.data(), email.password.tag.size(), nullptr);   //: password_tag
 
             if (sqlite3_step(stmt_emails.get()) != SQLITE_DONE) {
                 throw std::runtime_error(std::format("failed insert email. sql error: {}", sqlite3_errmsg(m_db.get())));
@@ -123,10 +125,10 @@ void DatabaseStorage::create_chat(const Chat& chat) {
  * @param chat_id Идентификатор чата
  * @return Данные чата, если он найден
  */
-std::optional<Chat> DatabaseStorage::find_chat(int64_t chat_id) const noexcept {
+std::optional<ChatCipher> DatabaseStorage::find_chat(int64_t chat_id) const noexcept {
 
     constexpr const char* sql_chats  = "SELECT * FROM chats WHERE id = ?;";
-    constexpr const char* sql_emails = "SELECT id, address, password, last_uid FROM emails WHERE chat_id = ?;";
+    constexpr const char* sql_emails = "SELECT id, address, last_uid, password, password_iv, password_tag FROM emails WHERE chat_id = ?;";
 
     auto deleter = [](sqlite3_stmt* stmt) { sqlite3_finalize(stmt); };
 
@@ -164,14 +166,7 @@ std::optional<Chat> DatabaseStorage::find_chat(int64_t chat_id) const noexcept {
         return std::nullopt;
     }
 
-    auto set_text = [](sqlite3_stmt* stmt, int col, std::string& dest) {
-        const unsigned char* text_raw = sqlite3_column_text(stmt, col);
-        if (text_raw) {
-            dest = reinterpret_cast<const char*>(text_raw);
-        }
-    };
-
-    Chat chat;
+    ChatCipher chat;
     chat.id = sqlite3_column_int64(stmt_chats.get(), 0);
     set_text(stmt_chats.get(), 1, chat.username);
     set_text(stmt_chats.get(), 2, chat.first_name);
@@ -179,11 +174,13 @@ std::optional<Chat> DatabaseStorage::find_chat(int64_t chat_id) const noexcept {
 
     //: Выполнение запроса к emails
     while (sqlite3_step(stmt_emails.get()) == SQLITE_ROW) {
-        Email email;
+        EmailCipher email;
         email.id = sqlite3_column_int64(stmt_emails.get(), 0);
         set_text(stmt_emails.get(), 1, email.address);
-        set_text(stmt_emails.get(), 2, email.password);
-        email.last_uid = sqlite3_column_int64(stmt_emails.get(), 3);
+        email.last_uid = sqlite3_column_int64(stmt_emails.get(), 2);
+        set_blob(stmt_emails.get(), 3, email.password.data);
+        set_blob(stmt_emails.get(), 4, email.password.iv);
+        set_blob(stmt_emails.get(), 5, email.password.tag);
 
         chat.emails[email.id] = std::move(email);
     }
@@ -199,14 +196,16 @@ std::optional<Chat> DatabaseStorage::find_chat(int64_t chat_id) const noexcept {
  * 
  * Если какие-либо чаты не найдены, вернётся список только найденных
  */
-std::vector<Chat> DatabaseStorage::find_chats(const std::vector<int64_t>& chat_ids) const noexcept {
+std::vector<ChatCipher> DatabaseStorage::find_chats(const std::vector<int64_t>& chat_ids) const noexcept {
 
     constexpr const char* sql_create_tmp   = "CREATE TEMP TABLE ids (id INT);";
     constexpr const char* sql_insert_tmp   = "INSERT INTO ids VALUES (?);";
     constexpr const char* sql_select_chats = R"(SELECT chats.*
                                              FROM chats
                                              JOIN ids ON chats.id = ids.id;)";
-    constexpr const char* sql_emails       = "SELECT id, address, password, last_uid FROM emails WHERE chat_id = ?;";
+    constexpr const char* sql_emails       = R"(SELECT id, address, last_uid, password, password_iv, password_tag
+                                                FROM emails
+                                                WHERE chat_id = ?;)";
 
     auto deleter = [](sqlite3_stmt* stmt) { sqlite3_finalize(stmt); };
 
@@ -262,18 +261,11 @@ std::vector<Chat> DatabaseStorage::find_chats(const std::vector<int64_t>& chat_i
         }
     }
 
-    auto set_text = [](sqlite3_stmt* stmt, int col, std::string& dest) {
-        const unsigned char* text_raw = sqlite3_column_text(stmt, col);
-        if (text_raw) {
-            dest = reinterpret_cast<const char*>(text_raw);
-        }
-    };
-
-    std::vector<Chat> chats;
+    std::vector<ChatCipher> chats;
 
     while (sqlite3_step(stmt_chats.get()) == SQLITE_ROW) {
 
-        Chat chat;
+        ChatCipher chat;
         chat.id = sqlite3_column_int64(stmt_chats.get(), 0);
         set_text(stmt_chats.get(), 1, chat.username);
         set_text(stmt_chats.get(), 2, chat.first_name);
@@ -296,13 +288,13 @@ std::vector<Chat> DatabaseStorage::find_chats(const std::vector<int64_t>& chat_i
 
         //: Выполнение запроса к emails
         while (sqlite3_step(stmt_emails.get()) == SQLITE_ROW) {
-            Email email;
+            EmailCipher email;
             email.id = sqlite3_column_int64(stmt_emails.get(), 0);
             set_text(stmt_emails.get(), 1, email.address);
-            set_text(stmt_emails.get(), 2, email.password);
-            email.last_uid = sqlite3_column_int64(stmt_emails.get(), 3);
-
-            chat.emails[email.id] = std::move(email);
+            email.last_uid = sqlite3_column_int64(stmt_emails.get(), 2);
+            set_blob(stmt_emails.get(), 3, email.password.data);
+            set_blob(stmt_emails.get(), 4, email.password.iv);
+            set_blob(stmt_emails.get(), 5, email.password.tag);
         }
 
         chats.push_back(std::move(chat));
@@ -345,12 +337,12 @@ std::vector<int64_t> DatabaseStorage::chat_ids() const noexcept {
 
 /**
  * @brief Добавление новой почты
- * @param chat_id Идентификатор чата
- * @param email   Данные электронной почты
+ * @param chat_id    Идентификатор чата
+ * @param email      Данные электронной почты
  */
-void DatabaseStorage::append_email(int64_t chat_id, const Email& email) {
+void DatabaseStorage::append_email(int64_t chat_id, const EmailCipher& email) {
 
-    constexpr const char* sql = "INSERT INTO emails VALUES(?, ?, ?, ?, ?)";
+    constexpr const char* sql = "INSERT INTO emails VALUES(?, ?, ?, ?, ?, ?, ?)";
 
     auto deleter = [](sqlite3_stmt* stmt) { sqlite3_finalize(stmt); };
 
@@ -364,11 +356,31 @@ void DatabaseStorage::append_email(int64_t chat_id, const Email& email) {
         throw std::runtime_error(std::format("sql error: {}", sqlite3_errmsg(m_db.get())));
     }
 
-    sqlite3_bind_null(stmt.get(), 1);                                      //: emails.id
-    sqlite3_bind_int64(stmt.get(), 2, chat_id);                            //: emails.chat_id
-    sqlite3_bind_text(stmt.get(), 3, email.address.c_str(), -1, nullptr);  //: emails.address
-    sqlite3_bind_text(stmt.get(), 4, email.password.c_str(), -1, nullptr); //: emails.password
-    sqlite3_bind_int64(stmt.get(), 5, email.last_uid);                     //: emails.last_uid
+    sqlite3_bind_null(stmt.get(), 1);                                     //: id
+    sqlite3_bind_int64(stmt.get(), 2, chat_id);                           //: chat_id
+    sqlite3_bind_text(stmt.get(), 3, email.address.c_str(), -1, nullptr); //: address
+    sqlite3_bind_int64(stmt.get(), 4, email.last_uid);                    //: last_uid
+
+    //: password
+    if (email.password.data.size() > 0) {
+        sqlite3_bind_blob(stmt.get(), 5, email.password.data.data(), email.password.data.size(), nullptr);
+    } else {
+        sqlite3_bind_null(stmt.get(), 5);
+    }
+
+    //: password_iv
+    if (email.password.data.size() > 0) {
+        sqlite3_bind_blob(stmt.get(), 6, email.password.iv.data(), email.password.iv.size(), nullptr);
+    } else {
+        sqlite3_bind_null(stmt.get(), 6);
+    }
+
+    //: password_tag
+    if (email.password.tag.size() > 0) {
+        sqlite3_bind_blob(stmt.get(), 7, email.password.tag.data(), email.password.tag.size(), nullptr);
+    } else {
+        sqlite3_bind_null(stmt.get(), 7);
+    }
 
     err = sqlite3_step(stmt.get());
     if (err != SQLITE_DONE) {
@@ -380,11 +392,12 @@ void DatabaseStorage::append_email(int64_t chat_id, const Email& email) {
 
 /**
  * @brief Обновление данных об электронной почте
- * @param chat Данные чата
+ * @param chat_id    Идентификатор чата
+ * @param email      Данные электронной почты
  */
-void DatabaseStorage::update_email(int64_t chat_id, const Email& email) {
+void DatabaseStorage::update_email(int64_t chat_id, const EmailCipher& email) {
 
-    constexpr const char* sql = "UPDATE emails SET address=?, password=?, last_uid=? WHERE id = ?";
+    constexpr const char* sql = "UPDATE emails SET address=?, last_uid=?, password=?, password_iv=?, password_tag=? WHERE id = ?";
 
     auto deleter = [](sqlite3_stmt* stmt) { sqlite3_finalize(stmt); };
 
@@ -398,10 +411,31 @@ void DatabaseStorage::update_email(int64_t chat_id, const Email& email) {
         throw std::runtime_error(std::format("sql error: {}", sqlite3_errmsg(m_db.get())));
     }
 
-    sqlite3_bind_text(stmt.get(), 1, email.address.c_str(), -1, nullptr);  //: emails.address
-    sqlite3_bind_text(stmt.get(), 2, email.password.c_str(), -1, nullptr); //: emails.password
-    sqlite3_bind_int64(stmt.get(), 3, email.last_uid);                     //: emails.last_uid
-    sqlite3_bind_int64(stmt.get(), 4, email.id);                           //: emails.id
+    sqlite3_bind_text(stmt.get(), 1, email.address.c_str(), -1, nullptr); //: address
+    sqlite3_bind_int64(stmt.get(), 2, email.last_uid);                    //: last_uid
+
+    //: password
+    if (email.password.data.size() > 0) {
+        sqlite3_bind_blob(stmt.get(), 3, email.password.data.data(), email.password.data.size(), nullptr);
+    } else {
+        sqlite3_bind_null(stmt.get(), 3);
+    }
+
+    //: password_iv
+    if (email.password.data.size() > 0) {
+        sqlite3_bind_blob(stmt.get(), 4, email.password.iv.data(), email.password.iv.size(), nullptr);
+    } else {
+        sqlite3_bind_null(stmt.get(), 4);
+    }
+
+    //: password_tag
+    if (email.password.tag.size() > 0) {
+        sqlite3_bind_blob(stmt.get(), 5, email.password.tag.data(), email.password.tag.size(), nullptr);
+    } else {
+        sqlite3_bind_null(stmt.get(), 5);
+    }
+
+    sqlite3_bind_int64(stmt.get(), 6, email.id); //: emails.id
 
     err = sqlite3_step(stmt.get());
     if (err != SQLITE_DONE) {
@@ -563,5 +597,37 @@ bool DatabaseStorage::set_db_version(int version) {
     }
 
     return true;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Получение из запроса текстового значения
+ * @param[in]  stmt Запрос
+ * @param[in]  col  Колонка
+ * @param[out] dest Куда записать
+ */
+void DatabaseStorage::set_text(sqlite3_stmt* stmt, int col, std::string& dest) const noexcept {
+    const unsigned char* text_raw = sqlite3_column_text(stmt, col);
+    if (text_raw) {
+        dest = reinterpret_cast<const char*>(text_raw);
+    }
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Получение из запроса данных типа BLOB
+ * @param[in]  stmt Запрос
+ * @param[in]  col  Колонка
+ * @param[out] dest Куда записать
+ */
+void DatabaseStorage::set_blob(sqlite3_stmt* stmt, int col, std::vector<uint8_t>& dest) const noexcept {
+    const void* raw_data = sqlite3_column_blob(stmt, col);
+    // Получаем размер данных в байтах
+    int bytes = sqlite3_column_bytes(stmt, col);
+    if (raw_data && bytes > 0) {
+        // Копируем данные в вектор
+        const uint8_t* byte_ptr = static_cast<const uint8_t*>(raw_data);
+        dest.assign(byte_ptr, byte_ptr + bytes);
+    }
 }
 //----------------------------------------------------------------------------------------------------------------------

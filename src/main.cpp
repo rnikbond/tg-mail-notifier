@@ -6,6 +6,7 @@
 //----------------------------------------------------------
 #include "cache/Cache.h"
 #include "core/Config.h"
+#include "core/PasswordCryptor.h"
 #include "mail/MailManager.h"
 #include "storage/database/DatabaseStorage.h"
 #include "storage/memory/MemoryStorage.h"
@@ -32,6 +33,7 @@ int main(int argc, char **argv) {
         }
     }
 
+    PasswordCryptor::init(cfg.m_cipher_key, cfg.m_cipher_salt);
     TelegramSenderFactory::configure(cfg.m_tg_host_port, cfg.m_tg_token);
 
     std::unique_ptr<MemoryStorage>   m_memory_storage;

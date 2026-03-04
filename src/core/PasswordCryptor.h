@@ -19,7 +19,7 @@ public:
     PasswordCryptor()  = default;
     ~PasswordCryptor() = default;
 
-    static void init(const std::vector<uint8_t>& key, const std::string& salt);
+    static void init(const std::string& key, const std::string& salt);
 
 public:
 

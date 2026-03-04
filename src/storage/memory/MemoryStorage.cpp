@@ -10,7 +10,7 @@
  * 
  * @throw std::logic_error Выбарсывается, если chat_id уже существует
  */
-void MemoryStorage::create_chat(const Chat& chat) {
+void MemoryStorage::create_chat(const ChatCipher& chat) {
 
     if (m_data.contains(chat.id)) {
         throw std::logic_error(std::format("chat already exists. chat_id: {}", chat.id));
@@ -25,7 +25,7 @@ void MemoryStorage::create_chat(const Chat& chat) {
  * @param chat_id Идентификатор чата
  * @return Данные чата, если он анйден. Иначе std::nullopt.
  */
-std::optional<Chat> MemoryStorage::find_chat(int64_t chat_id) const noexcept {
+std::optional<ChatCipher> MemoryStorage::find_chat(int64_t chat_id) const noexcept {
 
     if (auto it = m_data.find(chat_id); it != m_data.end()) {
         return it->second;
@@ -43,9 +43,9 @@ std::optional<Chat> MemoryStorage::find_chat(int64_t chat_id) const noexcept {
  * Возвращаются только найденные чаты.
  * Если какой-либо из чатов не найден, он будет проигнорирован.
  */
-std::vector<Chat> MemoryStorage::find_chats(const std::vector<int64_t>& chat_ids) const noexcept {
+std::vector<ChatCipher> MemoryStorage::find_chats(const std::vector<int64_t>& chat_ids) const noexcept {
 
-    std::vector<Chat> chats;
+    std::vector<ChatCipher> chats;
     for (int64_t chat_id : chat_ids) {
         if (auto it = m_data.find(chat_id); it != m_data.end()) {
             chats.push_back(it->second);
@@ -73,13 +73,13 @@ std::vector<int64_t> MemoryStorage::chat_ids() const noexcept {
 
 /*!
  * @brief Добавление электронной почты к чату
- * @param chat_id Идентификатор чата
- * @param email   Данные электронной почты
+ * @param chat_id    Идентификатор чата
+ * @param email      Данные электронной почты
  * 
  * @throw std::logic_error  Выбрасывается, если email.id != -1 или если такое email.address уже добавлен к этому чату
  * @throw std::out_of_range Выбрасывается, если chat_it не найден
  */
-void MemoryStorage::append_email(int64_t chat_id, const Email& email) {
+void MemoryStorage::append_email(int64_t chat_id, const EmailCipher& email) {
 
     if (email.id >= 0) {
         throw std::logic_error(std::format("failed create email: Email::id must been = -1"));
@@ -101,12 +101,12 @@ void MemoryStorage::append_email(int64_t chat_id, const Email& email) {
 
 /*!
  * @brief Обновление информации об электронной почте
- * @param chat_id Идентификатор чата
- * @param email   Данные электронной почты
+ * @param chat_id    Идентификатор чата
+ * @param email      Данные электронной почты
  * 
  * @throw std::out_of_range Выбрасывается, если не найден chat_id или email.id.
  */
-void MemoryStorage::update_email(int64_t chat_id, const Email& email) {
+void MemoryStorage::update_email(int64_t chat_id, const EmailCipher& email) {
 
     auto it = m_data.find(chat_id);
     if (it == m_data.end()) {

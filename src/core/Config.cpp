@@ -50,6 +50,11 @@ void Config::parse(int argc, char **argv, const std::string &path) {
         ->default_val(m_storage);
     storage->add_option("--db-dsn", m_db_dsn, "Строка подключения к базе данных")->default_val(m_db_dsn);
 
+    //: Секция [cipher]
+    auto cipher = app.add_option_group("cipher", "Шифрование");
+    cipher->add_option("--cipher-key", m_cipher_key, "Ключ шифрования паролей");
+    cipher->add_option("--cipher-salt", m_cipher_salt, "Соль для шифрования паролей");
+
     //: Секция [log]
     auto log = app.add_option_group("log", "Логирование");
     log->add_option("--log-path", m_log_path, "Путь к лог-файлу")->default_val(m_log_path);

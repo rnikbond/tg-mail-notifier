@@ -6,11 +6,13 @@ CREATE TABLE chats (
 );
 
 CREATE TABLE emails (
-    id       INTEGER PRIMARY KEY AUTOINCREMENT,
-    chat_id  INTEGER NOT NULL,
-    address  TEXT    NOT NULL,
-    password TEXT,
-    last_uid INTEGER,
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id      INTEGER NOT NULL,
+    address      TEXT    NOT NULL,
+    last_uid     INTEGER,
+    password     BLOB,
+    password_iv  BLOB,
+    password_tag BLOB,
 
     FOREIGN KEY (chat_id) REFERENCES chats(id)
 );
