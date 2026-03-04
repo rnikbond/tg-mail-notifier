@@ -125,23 +125,42 @@ void DatabaseStorage::create_chat(const Chat& chat) {
  */
 std::optional<Chat> DatabaseStorage::find_chat(int64_t chat_id) const noexcept {
 
-    constexpr const char* sql = "SELECT * FROM chats WHERE id = ?;";
+    constexpr const char* sql_chats  = "SELECT * FROM chats WHERE id = ?;";
+    constexpr const char* sql_emails = "SELECT id, address, password, last_uid FROM emails WHERE chat_id = ?;";
 
     auto deleter = [](sqlite3_stmt* stmt) { sqlite3_finalize(stmt); };
 
-    std::unique_ptr<sqlite3_stmt, decltype(deleter)> stmt;
+    std::unique_ptr<sqlite3_stmt, decltype(deleter)> stmt_chats;
+    std::unique_ptr<sqlite3_stmt, decltype(deleter)> stmt_emails;
 
-    sqlite3_stmt* stmt_raw;
-    int           err = sqlite3_prepare_v2(m_db.get(), sql, -1, &stmt_raw, nullptr);
+    sqlite3_stmt* stmt_chats_raw;
+    sqlite3_stmt* stmt_emails_raw;
 
-    stmt.reset(stmt_raw);
+    int err = sqlite3_prepare_v2(m_db.get(), sql_chats, -1, &stmt_chats_raw, nullptr);
+
+    stmt_chats.reset(stmt_chats_raw);
     if (err != SQLITE_OK) {
-        log_error("sql error: {}", sqlite3_errmsg(m_db.get()));
+        log_error("sql error on chats: {}", sqlite3_errmsg(m_db.get()));
         return std::nullopt;
     }
 
-    sqlite3_bind_int64(stmt.get(), 1, chat_id);
-    if (sqlite3_step(stmt.get()) != SQLITE_ROW) {
+    err = sqlite3_prepare_v2(m_db.get(), sql_emails, -1, &stmt_emails_raw, nullptr);
+
+    stmt_emails.reset(stmt_emails_raw);
+    if (err != SQLITE_OK) {
+        log_error("sql error on emails: {}", sqlite3_errmsg(m_db.get()));
+        return std::nullopt;
+    }
+
+    //: chats
+    sqlite3_bind_int64(stmt_chats.get(), 1, chat_id); //: chats.id
+
+    //: emails
+    sqlite3_bind_int64(stmt_emails.get(), 1, chat_id); //: emails.chat_id
+
+    //: Выполнение запроса к chats
+    int rc_chats = sqlite3_step(stmt_chats.get());
+    if (rc_chats != SQLITE_ROW) {
         return std::nullopt;
     }
 
@@ -153,10 +172,21 @@ std::optional<Chat> DatabaseStorage::find_chat(int64_t chat_id) const noexcept {
     };
 
     Chat chat;
-    chat.id = sqlite3_column_int64(stmt.get(), 0);
-    set_text(stmt.get(), 1, chat.username);
-    set_text(stmt.get(), 2, chat.first_name);
-    set_text(stmt.get(), 3, chat.last_name);
+    chat.id = sqlite3_column_int64(stmt_chats.get(), 0);
+    set_text(stmt_chats.get(), 1, chat.username);
+    set_text(stmt_chats.get(), 2, chat.first_name);
+    set_text(stmt_chats.get(), 3, chat.last_name);
+
+    //: Выполнение запроса к emails
+    while (sqlite3_step(stmt_emails.get()) == SQLITE_ROW) {
+        Email email;
+        email.id = sqlite3_column_int64(stmt_emails.get(), 0);
+        set_text(stmt_emails.get(), 1, email.address);
+        set_text(stmt_emails.get(), 2, email.password);
+        email.last_uid = sqlite3_column_int64(stmt_emails.get(), 3);
+
+        chat.emails[email.id] = std::move(email);
+    }
 
     return chat;
 }
@@ -211,6 +241,32 @@ std::vector<int64_t> DatabaseStorage::chat_ids() const noexcept {
  * @param email   Данные электронной почты
  */
 void DatabaseStorage::append_email(int64_t chat_id, const Email& email) {
+
+    constexpr const char* sql = "INSERT INTO emails VALUES(?, ?, ?, ?, ?)";
+
+    auto deleter = [](sqlite3_stmt* stmt) { sqlite3_finalize(stmt); };
+
+    std::unique_ptr<sqlite3_stmt, decltype(deleter)> stmt;
+
+    sqlite3_stmt* stmt_raw;
+    int           err = sqlite3_prepare_v2(m_db.get(), sql, -1, &stmt_raw, nullptr);
+    stmt.reset(stmt_raw);
+
+    if (err != SQLITE_OK) {
+        throw std::runtime_error(std::format("sql error: {}", sqlite3_errmsg(m_db.get())));
+    }
+
+    sqlite3_bind_null(stmt.get(), 1);                                      //: emails.id
+    sqlite3_bind_int64(stmt.get(), 2, chat_id);                            //: emails.chat_id
+    sqlite3_bind_text(stmt.get(), 3, email.address.c_str(), -1, nullptr);  //: emails.address
+    sqlite3_bind_text(stmt.get(), 4, email.password.c_str(), -1, nullptr); //: emails.password
+    sqlite3_bind_int64(stmt.get(), 5, email.last_uid);                     //: emails.last_uid
+
+    err = sqlite3_step(stmt.get());
+    if (err != SQLITE_DONE) {
+        throw std::runtime_error(
+            std::format("failed append email. chat_id={}, email.address={}, error: {}", chat_id, email.address, sqlite3_errmsg(m_db.get())));
+    }
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -219,6 +275,34 @@ void DatabaseStorage::append_email(int64_t chat_id, const Email& email) {
  * @param chat Данные чата
  */
 void DatabaseStorage::update_email(int64_t chat_id, const Email& email) {
+
+    constexpr const char* sql = "UPDATE emails SET address=?, password=?, last_uid=? WHERE id = ?";
+
+    auto deleter = [](sqlite3_stmt* stmt) { sqlite3_finalize(stmt); };
+
+    std::unique_ptr<sqlite3_stmt, decltype(deleter)> stmt;
+
+    sqlite3_stmt* stmt_raw;
+    int           err = sqlite3_prepare_v2(m_db.get(), sql, -1, &stmt_raw, nullptr);
+    stmt.reset(stmt_raw);
+
+    if (err != SQLITE_OK) {
+        throw std::runtime_error(std::format("sql error: {}", sqlite3_errmsg(m_db.get())));
+    }
+
+    sqlite3_bind_text(stmt.get(), 1, email.address.c_str(), -1, nullptr);  //: emails.address
+    sqlite3_bind_text(stmt.get(), 2, email.password.c_str(), -1, nullptr); //: emails.password
+    sqlite3_bind_int64(stmt.get(), 3, email.last_uid);                     //: emails.last_uid
+    sqlite3_bind_int64(stmt.get(), 4, email.id);                           //: emails.id
+
+    err = sqlite3_step(stmt.get());
+    if (err != SQLITE_DONE) {
+        throw std::runtime_error(std::format("failed update email. chat_id={}, email.id={}, email.address={}, error: {}",
+                                             chat_id,
+                                             email.id,
+                                             email.address,
+                                             sqlite3_errmsg(m_db.get())));
+    }
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -228,6 +312,26 @@ void DatabaseStorage::update_email(int64_t chat_id, const Email& email) {
  * @param email_id Идентификатор электронной почты
  */
 void DatabaseStorage::delete_email(int64_t chat_id, int64_t email_id) {
+
+    constexpr const char* sql = "DELETE FROM emails WHERE id = ?";
+
+    auto deleter = [](sqlite3_stmt* stmt) { sqlite3_finalize(stmt); };
+
+    std::unique_ptr<sqlite3_stmt, decltype(deleter)> stmt;
+
+    sqlite3_stmt* stmt_raw;
+    int           err = sqlite3_prepare_v2(m_db.get(), sql, -1, &stmt_raw, nullptr);
+    stmt.reset(stmt_raw);
+    if (err != SQLITE_OK) {
+        throw std::runtime_error(std::format("sql error: {}", sqlite3_errmsg(m_db.get())));
+    }
+
+    sqlite3_bind_int64(stmt.get(), 1, email_id); //: email.id
+
+    err = sqlite3_step(stmt.get());
+    if (err != SQLITE_DONE) {
+        throw std::runtime_error(std::format("failed delete email. id={}, chat_id={}, error: {}", email_id, chat_id, sqlite3_errmsg(m_db.get())));
+    }
 }
 //----------------------------------------------------------------------------------------------------------------------
 

@@ -312,7 +312,7 @@ TelegramRequest TelegramController::process_reply_email(const json& body_js, int
 
     Email email;
     if (!chat->emails.empty()) {
-        email = chat->emails.at(0);
+        email = chat->emails.begin()->second;
     }
 
     email.address = value;
@@ -395,7 +395,13 @@ TelegramRequest TelegramController::process_reply_email(const json& body_js, int
  */
 TelegramRequest TelegramController::process_reply_password(const json& body_js, int idx, std::shared_ptr<const Chat> chat) {
 
-    if (chat->emails.empty() || chat->emails.at(0).address.empty()) {
+    if (chat->emails.empty()) {
+        std::string text = std::format("Сначала нужно указать Email через команду: {}\n", find_command_text(Commands::Email));
+        return prepare_request_text(chat, text);
+    }
+
+    Email email = chat->emails.begin()->second;
+    if (email.address.empty()) {
         std::string text = std::format("Сначала нужно указать Email через команду: {}\n", find_command_text(Commands::Email));
         return prepare_request_text(chat, text);
     }
@@ -404,7 +410,6 @@ TelegramRequest TelegramController::process_reply_password(const json& body_js, 
     std::string_view value = text;
     strip_whitespace(value);
 
-    Email email    = chat->emails.at(0);
     email.password = value;
     if (!email.password.empty()) {
         auto res = check_email_auth(chat->id, email);
