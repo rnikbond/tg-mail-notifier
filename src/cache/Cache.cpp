@@ -13,6 +13,7 @@
  */
 Cache::Cache(std::unique_ptr<IStorage> storage)
     : m_storage(std::move(storage)) {
+    reload_from_storage();
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -135,7 +136,7 @@ IRepository::ChatsResult Cache::find_chats(const std::vector<int64_t>& chat_ids)
  */
 IRepository::Chats Cache::chats() noexcept {
 
-    std::shared_lock lock(m_mutex);
+    std::shared_lock read_lock(m_mutex);
 
     std::vector<std::shared_ptr<const Chat>> chats;
     chats.reserve(m_cache_data.size());
@@ -143,7 +144,6 @@ IRepository::Chats Cache::chats() noexcept {
     for (auto& [_, chat_ptr] : m_cache_data) {
         chats.push_back(chat_ptr);
     }
-
     return chats;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -326,6 +326,21 @@ bool Cache::delete_email(int64_t chat_id, int64_t email_id) noexcept {
     }
 
     return true;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Перезагрузка данных из хранилища
+ */
+void Cache::reload_from_storage() {
+
+    m_cache_data.clear();
+
+    auto ids   = m_storage->chat_ids();
+    auto chats = m_storage->find_chats(ids);
+    for (Chat& chat : chats) {
+        m_cache_data.emplace(chat.id, std::make_shared<Chat>(std::move(chat)));
+    }
 }
 //----------------------------------------------------------------------------------------------------------------------
 
