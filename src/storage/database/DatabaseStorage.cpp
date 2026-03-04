@@ -288,13 +288,15 @@ std::vector<ChatCipher> DatabaseStorage::find_chats(const std::vector<int64_t>& 
 
         //: Выполнение запроса к emails
         while (sqlite3_step(stmt_emails.get()) == SQLITE_ROW) {
-            EmailCipher email;
-            email.id = sqlite3_column_int64(stmt_emails.get(), 0);
-            set_text(stmt_emails.get(), 1, email.address);
-            email.last_uid = sqlite3_column_int64(stmt_emails.get(), 2);
-            set_blob(stmt_emails.get(), 3, email.password.data);
-            set_blob(stmt_emails.get(), 4, email.password.iv);
-            set_blob(stmt_emails.get(), 5, email.password.tag);
+            EmailCipher email_cipher;
+            email_cipher.id = sqlite3_column_int64(stmt_emails.get(), 0);
+            set_text(stmt_emails.get(), 1, email_cipher.address);
+            email_cipher.last_uid = sqlite3_column_int64(stmt_emails.get(), 2);
+            set_blob(stmt_emails.get(), 3, email_cipher.password.data);
+            set_blob(stmt_emails.get(), 4, email_cipher.password.iv);
+            set_blob(stmt_emails.get(), 5, email_cipher.password.tag);
+
+            chat.emails[email_cipher.id] = std::move(email_cipher);
         }
 
         chats.push_back(std::move(chat));

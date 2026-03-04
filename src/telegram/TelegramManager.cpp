@@ -100,15 +100,16 @@ void TelegramManager::run() {
 
         int64_t     upd_id = (m_last_chat_update_id == -1) ? -1 : m_last_chat_update_id + 1;
         std::string url    = std::format(url_template, m_token, upd_id, m_timeout);
-
-        httplib::Result res = m_http->Get(url);
-        if (!res) {
-            auto err = res.error();
-            log_error(std::format("http::Get({}) returned error: {}", url, httplib::to_string(err)));
-            continue;
-        }
+        httplib::Result res;
 
         try {
+            httplib::Result res = m_http->Get(url);
+            if (!res) {
+                auto err = res.error();
+                log_error(std::format("http::Get({}) returned error: {}", url, httplib::to_string(err)));
+                continue;
+            }
+
             TelegramResponse response;
             response.body = res->body;
 
@@ -118,7 +119,7 @@ void TelegramManager::run() {
             }
 
         } catch (const std::exception& ex) {
-            log_error(std::format("error process telegram response: {}", ex.what()));
+            log_error(std::format("exception 'getUpdates': {}", ex.what()));
         }
 
         bool is_stop = m_wait_cond.wait_for(lock, std::chrono::seconds(1), [&]() { return m_request_stop; });

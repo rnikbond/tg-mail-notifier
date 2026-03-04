@@ -59,6 +59,7 @@ add_executable(tg-mail-notifier
     ${INCLUDES}
     ${SOURCES}
     src/core/PasswordCryptor.h src/core/PasswordCryptor.cpp
+    src/utils/ExecutionTimer.h src/utils/ExecutionTimer.cpp
 )
 
 ## Подключение миграций
