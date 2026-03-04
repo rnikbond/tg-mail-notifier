@@ -200,7 +200,115 @@ std::optional<Chat> DatabaseStorage::find_chat(int64_t chat_id) const noexcept {
  * Если какие-либо чаты не найдены, вернётся список только найденных
  */
 std::vector<Chat> DatabaseStorage::find_chats(const std::vector<int64_t>& chat_ids) const noexcept {
-    return {};
+
+    constexpr const char* sql_create_tmp   = "CREATE TEMP TABLE ids (id INT);";
+    constexpr const char* sql_insert_tmp   = "INSERT INTO ids VALUES (?);";
+    constexpr const char* sql_select_chats = R"(SELECT chats.*
+                                             FROM chats
+                                             JOIN ids ON chats.id = ids.id;)";
+    constexpr const char* sql_emails       = "SELECT id, address, password, last_uid FROM emails WHERE chat_id = ?;";
+
+    auto deleter = [](sqlite3_stmt* stmt) { sqlite3_finalize(stmt); };
+
+    { //: Вставка во временную таблицу
+
+        int rc = sqlite3_exec(m_db.get(), "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+        if (rc != SQLITE_OK) {
+            log_error("failed BEGIN TRANSACTION. error: {}", sqlite3_errmsg(m_db.get()));
+            return {};
+        }
+
+        rc = sqlite3_exec(m_db.get(), sql_create_tmp, nullptr, nullptr, nullptr);
+        if (rc != SQLITE_OK) {
+            log_error("failed create temp table. error: {}", sqlite3_errmsg(m_db.get()));
+            return {};
+        }
+
+        std::unique_ptr<sqlite3_stmt, decltype(deleter)> stmt;
+
+        {
+            sqlite3_stmt* stmt_raw;
+            rc = sqlite3_prepare_v2(m_db.get(), sql_insert_tmp, -1, &stmt_raw, nullptr);
+            stmt.reset(stmt_raw);
+            if (rc != SQLITE_OK) {
+                log_error("failed prepare insert in temp table. error: {}", sqlite3_errmsg(m_db.get()));
+                return {};
+            }
+        }
+
+        for (int64_t chat_id : chat_ids) {
+            sqlite3_bind_int64(stmt.get(), 1, chat_id);
+            sqlite3_step(stmt.get());
+            sqlite3_reset(stmt.get());
+        }
+
+        rc = sqlite3_exec(m_db.get(), "COMMIT;", nullptr, nullptr, nullptr);
+        if (rc != SQLITE_OK) {
+            log_error("failed COMMIT. error: {}", sqlite3_errmsg(m_db.get()));
+            return {};
+        }
+    }
+
+    std::unique_ptr<sqlite3_stmt, decltype(deleter)> stmt_chats;
+
+    {
+        sqlite3_stmt* stmt_raw;
+
+        int rc = sqlite3_prepare_v2(m_db.get(), sql_select_chats, -1, &stmt_raw, nullptr);
+        stmt_chats.reset(stmt_raw);
+        if (rc != SQLITE_OK) {
+            log_error("failed prepare select chats. error: {}", sqlite3_errmsg(m_db.get()));
+            return {};
+        }
+    }
+
+    auto set_text = [](sqlite3_stmt* stmt, int col, std::string& dest) {
+        const unsigned char* text_raw = sqlite3_column_text(stmt, col);
+        if (text_raw) {
+            dest = reinterpret_cast<const char*>(text_raw);
+        }
+    };
+
+    std::vector<Chat> chats;
+
+    while (sqlite3_step(stmt_chats.get()) == SQLITE_ROW) {
+
+        Chat chat;
+        chat.id = sqlite3_column_int64(stmt_chats.get(), 0);
+        set_text(stmt_chats.get(), 1, chat.username);
+        set_text(stmt_chats.get(), 2, chat.first_name);
+        set_text(stmt_chats.get(), 3, chat.last_name);
+
+        std::unique_ptr<sqlite3_stmt, decltype(deleter)> stmt_emails;
+
+        {
+            sqlite3_stmt* stmt_raw;
+
+            int rc = sqlite3_prepare_v2(m_db.get(), sql_emails, -1, &stmt_raw, nullptr);
+            stmt_emails.reset(stmt_raw);
+            if (rc != SQLITE_OK) {
+                log_error("failed prepare select emails. error: {}", sqlite3_errmsg(m_db.get()));
+                return {};
+            }
+        }
+
+        sqlite3_bind_int64(stmt_emails.get(), 1, chat.id);
+
+        //: Выполнение запроса к emails
+        while (sqlite3_step(stmt_emails.get()) == SQLITE_ROW) {
+            Email email;
+            email.id = sqlite3_column_int64(stmt_emails.get(), 0);
+            set_text(stmt_emails.get(), 1, email.address);
+            set_text(stmt_emails.get(), 2, email.password);
+            email.last_uid = sqlite3_column_int64(stmt_emails.get(), 3);
+
+            chat.emails[email.id] = std::move(email);
+        }
+
+        chats.push_back(std::move(chat));
+    }
+
+    return chats;
 }
 //----------------------------------------------------------------------------------------------------------------------
 
