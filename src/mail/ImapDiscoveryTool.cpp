@@ -11,6 +11,7 @@
 //----------------------------------------------------------
 #include "ImapDiscoveryTool.h"
 //----------------------------------------------------------
+CURLcode execute_curl(CURL* curl) noexcept;
 size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* s);
 std::string extract_imap_host(const std::string& xml);
 //----------------------------------------------------------
@@ -114,28 +115,29 @@ bool ImapDiscoveryTool::is_correct_email(const std::string_view& email) {
  */
 std::expected<bool, Errors::ImapDiscover> ImapDiscoveryTool::check_imap_server(const std::string& imap_url) {
 
-    CURL* curl = curl_easy_init();
-    if (!curl) {
+    CURL* curl_raw = curl_easy_init();
+    if (!curl_raw) {
+        log_error("failed curl_easy_init()");
         return std::unexpected(Errors::ImapDiscover::Internal);
     }
 
+    auto deleter = [](CURL* curl) { curl_easy_cleanup(curl); };
+
+    std::unique_ptr<CURL, decltype(deleter)> curl(curl_raw, deleter);
+
     // Указываем URL (например, "imaps://imap.example.com")
-    curl_easy_setopt(curl, CURLOPT_URL, imap_url.c_str());
+    curl_easy_setopt(curl.get(), CURLOPT_URL, imap_url.c_str());
 
     // Устанавливаем таймаут на подключение (в секундах)
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
+    curl_easy_setopt(curl.get(), CURLOPT_CONNECTTIMEOUT, 5L);
 
     // Режим "только подключение" — curl проверит TCP/SSL соединение и остановится
-    curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1L);
+    curl_easy_setopt(curl.get(), CURLOPT_CONNECT_ONLY, 1L);
 
     // Включаем подробный вывод для отладки (необязательно)
     // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
-    CURLcode res = curl_easy_perform(curl);
-
-    curl_easy_cleanup(curl);
-
-    // Если код CURLE_OK, значит сервер ответил и соединение установлено
+    CURLcode res = execute_curl(curl.get());
     return (res == CURLE_OK);
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -289,16 +291,16 @@ std::expected<std::string, Errors::ImapDiscover> ImapDiscoveryTool::url_via_auto
     curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, WriteCallback);
     curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &response_data);
-    curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, 5L);        // Таймаут 5 сек
+    curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, 5L);        // Таймаут на выпорлнение всего запроса = 5 сек
     curl_easy_setopt(curl.get(), CURLOPT_FOLLOWLOCATION, 1L); // Следовать редиректам
 
     //: Из-за самоподписанных сертификатов могут быть ошибки - отключаем
     curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYPEER, 0L);
     curl_easy_setopt(curl.get(), CURLOPT_SSL_VERIFYHOST, 0L);
 
-    CURLcode res = curl_easy_perform(curl.get());
+    CURLcode res = execute_curl(curl.get());
     if (res != CURLE_OK) {
-        log_error("CURL error: {}", curl_easy_strerror(res));
+        log_error("failed CURL repform. code={}, error: {}", static_cast<int>(res), curl_easy_strerror(res));
         return std::unexpected(Errors::ImapDiscover::Internal);
     }
 
@@ -308,6 +310,26 @@ std::expected<std::string, Errors::ImapDiscover> ImapDiscoveryTool::url_via_auto
     }
 
     return std::format("imaps://{}", host);
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/*!
+ * @brief Выполнение запроса CURL
+ * @param curl Объект
+ * @return \a CURLcode
+ */
+CURLcode execute_curl(CURL* curl) noexcept {
+
+    auto start = std::chrono::steady_clock::now();
+    log_info("CURL starting request");
+
+    CURLcode res = curl_easy_perform(curl);
+
+    auto end     = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    log_info("CURL request finished at: {}ms", elapsed);
+
+    return res;
 }
 //----------------------------------------------------------------------------------------------------------------------
 

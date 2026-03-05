@@ -150,11 +150,16 @@ Errors::Mail MailRequest::execute_request(const Email& email, const std::string&
     curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, write_callback_response);
     curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &response);
 
+    curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, 10L);       //: Общее ограничение на выполнение = 10 сек
+    curl_easy_setopt(curl.get(), CURLOPT_CONNECTTIMEOUT, 5L); //: Ограничение на подключение = 5 сек
+
     //: Иногда CURL возвращает код ошибки 100, но следующий запрос выполняется успешно.
     //: Делаем 3 попытки, если получаем код ошибки != CURLE_LOGIN_DENIED
     const int max_retries = 3;
     for (int attempt = 1; attempt <= max_retries; attempt++) {
-        CURLcode res = curl_easy_perform(curl.get());
+
+        //CURLcode res = curl_easy_perform(curl.get());
+        CURLcode res = (CURLcode) execute_curl(curl.get());
         switch (res) {
             case CURLE_OK:
                 return Errors::Mail::OK;
@@ -204,12 +209,16 @@ Errors::Mail MailRequest::execute_url(const Email& email, const std::string& url
     curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, write_callback_response);
     curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &response);
 
+    curl_easy_setopt(curl.get(), CURLOPT_TIMEOUT, 10L);       //: Общее ограничение на выполнение = 10 сек
+    curl_easy_setopt(curl.get(), CURLOPT_CONNECTTIMEOUT, 5L); //: Ограничение на подключение = 5 сек
+
     //: Иногда CURL возвращает код ошибки 100, но следующий запрос выполняется успешно.
     //: Делаем 3 попытки, если получаем код ошибки != CURLE_LOGIN_DENIED
     const int max_retries = 3;
     bool      is_ok       = false;
     for (int attempt = 1; !is_ok && attempt <= max_retries; attempt++) {
-        CURLcode res = curl_easy_perform(curl.get());
+        //CURLcode res = curl_easy_perform(curl.get());
+        CURLcode res = (CURLcode) execute_curl(curl.get());
         switch (res) {
             case CURLE_OK:
                 is_ok = true;
@@ -265,6 +274,26 @@ Errors::Mail MailRequest::execute_url(const Email& email, const std::string& url
     }
 
     return Errors::Mail::OK;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/*!
+ * @brief Выполнение запроса CURL
+ * @param curl Объект
+ * @return \a CURLcode
+ */
+int MailRequest::execute_curl(CURL* curl) const noexcept {
+
+    auto start = std::chrono::steady_clock::now();
+    log_info("CURL starting request");
+
+    CURLcode res = curl_easy_perform(curl);
+
+    auto end     = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    log_info("CURL request finished at: {}ms", elapsed);
+
+    return res;
 }
 //----------------------------------------------------------------------------------------------------------------------
 

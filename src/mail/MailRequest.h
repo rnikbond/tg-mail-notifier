@@ -6,6 +6,8 @@
 //----------------------------------------------------------
 class MailRequestFactory;
 //----------------------------------------------------------
+typedef void CURL;
+//----------------------------------------------------------
 
 /**
  * @brief Класс для запросов к почтовому серверу, реализующий интерфейс IMailRequest
@@ -34,6 +36,8 @@ private:
 
     Errors::Mail execute_request(const Email& email, const std::string& request, std::string& response) const noexcept;
     Errors::Mail execute_url(const Email& email, const std::string& url, std::string& response) const noexcept;
+
+    int execute_curl(CURL* curl) const noexcept;
 
     void extract_text_gmime(const std::string& raw_email, std::string& sender, std::string& dt, std::string& title, std::string& body) const noexcept;
 };
