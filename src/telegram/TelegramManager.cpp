@@ -111,11 +111,7 @@ void TelegramManager::run() {
         httplib::Result res;
 
         try {
-
-            log_info("=> request Get()");
             httplib::Result res = m_http->Get(url, headers);
-            log_info("<= response Get()");
-
             if (res) {
                 TelegramResponse response;
                 response.body = res->body;

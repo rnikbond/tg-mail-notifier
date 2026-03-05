@@ -4,7 +4,6 @@
 #include <curl/curl.h>
 #include <gmime/gmime.h>
 //----------------------------------------------------------
-#include "../utils/ExecutionTimer.h"
 #include "logger.h"
 //----------------------------------------------------------
 #include "MailRequest.h"
@@ -32,7 +31,7 @@ size_t write_callback_response(void* contents, size_t size, size_t nmemb, std::s
 */
 IMailRequest::UIDsResult MailRequest::load_uids(const Email& email) const noexcept {
 
-    ExecutionTimer benchmark(std::format("MailRequest::load_uids(email={})", email.address));
+    //ExecutionTimer benchmark(std::format("MailRequest::load_uids(email={})", email.address));
 
     std::string request = std::format("UID FETCH {}:* (FLAGS)", email.last_uid);
     std::string response;
@@ -70,7 +69,7 @@ IMailRequest::UIDsResult MailRequest::load_uids(const Email& email) const noexce
 */
 IMailRequest::UIDResult MailRequest::last_uid(const Email& email) const noexcept {
 
-    ExecutionTimer benchmark(std::format("MailRequest::last_uid(email={})", email.address));
+    //ExecutionTimer benchmark(std::format("MailRequest::last_uid(email={})", email.address));
 
     std::string request = "UID SEARCH ALL";
     std::string response;
@@ -107,7 +106,7 @@ IMailRequest::UIDResult MailRequest::last_uid(const Email& email) const noexcept
  */
 IMailRequest::MailMsgResult MailRequest::fetch_email(const Email& email, int64_t uid) const noexcept {
 
-    ExecutionTimer benchmark(std::format("MailRequest::fetch_email(email={})", email.address));
+    //ExecutionTimer benchmark(std::format("MailRequest::fetch_email(email={})", email.address));
 
     std::string url = std::format("imaps://imap.yandex.ru/INBOX/;UID={}", uid);
     url             = std::format("{}/INBOX/;UID={}", email.url_imap, uid);
