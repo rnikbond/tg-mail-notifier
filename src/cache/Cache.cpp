@@ -16,7 +16,9 @@
  */
 Cache::Cache(std::unique_ptr<IStorage> storage)
     : m_storage(std::move(storage)) {
+
     reload_from_storage();
+    check_mail_servers();
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -350,6 +352,35 @@ bool Cache::delete_email(int64_t chat_id, int64_t email_id) noexcept {
 //----------------------------------------------------------------------------------------------------------------------
 
 /**
+ * @brief Проверка почтовых серверов
+ */
+void Cache::check_mail_servers() {
+
+    std::vector<int64_t> refresh_chat_ids;
+
+    for (auto& [_, chat_ptr] : m_cache_data) {
+        for (auto& email : chat_ptr->emails | std::views::values) {
+            if (!email.address.empty() && email.url_imap.empty()) {
+                log_info("email with empty url_imap. updating...");
+                auto err_opt = update_mail_server(email.address);
+                if (err_opt) {
+                    log_warn("failed update url_imap. email={}, error: {}", email.address, Errors::to_string(err_opt.value()));
+                    continue;
+                }
+
+                refresh_chat_ids.push_back(chat_ptr->id);
+                log_info("email url_imap successfully updated. email: {}", email.address);
+            }
+        }
+    }
+
+    for (int64_t chat_id : refresh_chat_ids) {
+        refresh(chat_id);
+    }
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
  * @brief Обновление информации о почтовом сервере
  * @param email_addr Адрес почты
  * @return std::nullopt, если такой домен существует или успешно добален. Иначе ошибку.
@@ -368,8 +399,11 @@ std::optional<Errors::Repository> Cache::update_mail_server(const std::string& e
     }
 
     if (m_mail_servers.find(domain_res.value()) != m_mail_servers.end()) {
+        log_info("mail server found in cache. domain: {}", domain_res.value());
         return std::nullopt; //: Такой домен известен
     }
+
+    log_info("detecting mail server. domain: {}", domain_res.value());
 
     auto mail_server_res = ImapDiscoveryTool::detect_mail_server(email_addr);
     if (!mail_server_res.has_value()) {
@@ -384,6 +418,7 @@ std::optional<Errors::Repository> Cache::update_mail_server(const std::string& e
         }
     }
 
+    log_info("mail server detected. domain: {}", domain_res.value());
     auto mail_server = std::move(mail_server_res.value());
 
     try {

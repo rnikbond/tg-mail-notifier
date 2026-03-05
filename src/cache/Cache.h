@@ -53,6 +53,7 @@ private:
 
 private:
 
+    void check_mail_servers();
     std::optional<Errors::Repository> update_mail_server(const std::string& email_addr);
 
 private:

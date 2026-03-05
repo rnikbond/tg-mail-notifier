@@ -35,9 +35,10 @@ std::expected<MailServer, Errors::ImapDiscover> ImapDiscoveryTool::detect_mail_s
     MailServer info;
     info.domain = std::move(domain_res.value());
 
-    //: 1. Пробудем достучаеться через домен, указанный в почте
+    //: 1. Пробудем достучаться через домен, указанный в почте
     auto imap_url_res = url_by_domain(info.domain);
     if (imap_url_res) {
+        log_info("mail server detected. method=url_by_domain(), domain: {}", info.domain);
         info.url = imap_url_res.value();
         return info;
     }
@@ -46,6 +47,7 @@ std::expected<MailServer, Errors::ImapDiscover> ImapDiscoveryTool::detect_mail_s
     //:    Пробудем через mx запись
     imap_url_res = url_via_mx(info.domain);
     if (imap_url_res) {
+        log_info("mail server detected. method=url_via_mx(), domain: {}", info.domain);
         info.url = imap_url_res.value();
         return info;
     }
@@ -54,6 +56,7 @@ std::expected<MailServer, Errors::ImapDiscover> ImapDiscoveryTool::detect_mail_s
     //:    Пробудем через DNS SRV
     imap_url_res = url_via_dns_srv(info.domain);
     if (imap_url_res) {
+        log_info("mail server detected. method=url_via_dns_srv(), domain: {}", info.domain);
         info.url = imap_url_res.value();
         return info;
     }
@@ -62,6 +65,7 @@ std::expected<MailServer, Errors::ImapDiscover> ImapDiscoveryTool::detect_mail_s
     //:    Пробудем через Mozilla Autoconfig
     imap_url_res = url_via_autoconf(email, info.domain);
     if (imap_url_res) {
+        log_info("mail server detected. method=url_via_autoconf(), domain: {}", info.domain);
         info.url = imap_url_res.value();
         return info;
     }
