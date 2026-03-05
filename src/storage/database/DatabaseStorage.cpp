@@ -480,17 +480,87 @@ void DatabaseStorage::delete_email(int64_t chat_id, int64_t email_id) {
 //----------------------------------------------------------------------------------------------------------------------
 
 /**
+ * @brief Добавление информации о почтовом сервере
+ * @param server Данные почтового сервера
+ */
+void DatabaseStorage::append_mail_server(const MailServer& server) {
+
+    constexpr const char* sql = "INSERT INTO mail_servers VALUES(?, ?, ?)";
+
+    auto deleter = [](sqlite3_stmt* stmt) { sqlite3_finalize(stmt); };
+
+    std::unique_ptr<sqlite3_stmt, decltype(deleter)> stmt;
+
+    sqlite3_stmt* stmt_raw;
+    int           err = sqlite3_prepare_v2(m_db.get(), sql, -1, &stmt_raw, nullptr);
+    stmt.reset(stmt_raw);
+
+    if (err != SQLITE_OK) {
+        throw std::runtime_error(std::format("sql error: {}", sqlite3_errmsg(m_db.get())));
+    }
+
+    sqlite3_bind_null(stmt.get(), 1);                                     //: id
+    sqlite3_bind_text(stmt.get(), 2, server.domain.c_str(), -1, nullptr); //: domain
+    sqlite3_bind_text(stmt.get(), 3, server.url.c_str(), -1, nullptr);    //: url_imap
+
+    err = sqlite3_step(stmt.get());
+    if (err != SQLITE_DONE) {
+        throw std::runtime_error(
+            std::format("failed append mail server. domain={}, url_imap={}, error: {}", server.domain, server.url, sqlite3_errmsg(m_db.get())));
+    }
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Получение информации о почтовых серверах
+ * @return Список известных почтовых серверов
+ */
+std::vector<MailServer> DatabaseStorage::mail_servers() {
+
+    constexpr const char* sql = R"(SELECT domain, url_imap
+                                   FROM mail_servers;)";
+
+    auto deleter = [](sqlite3_stmt* stmt) { sqlite3_finalize(stmt); };
+
+    std::unique_ptr<sqlite3_stmt, decltype(deleter)> stmt;
+
+    sqlite3_stmt* stmt_raw;
+
+    int err = sqlite3_prepare_v2(m_db.get(), sql, -1, &stmt_raw, nullptr);
+    stmt.reset(stmt_raw);
+    if (err != SQLITE_OK) {
+        log_error("sql error on mail_servers: {}", sqlite3_errmsg(m_db.get()));
+        return {};
+    }
+
+    std::vector<MailServer> servers;
+
+    //: Выполнение запроса к emails
+    while (sqlite3_step(stmt.get()) == SQLITE_ROW) {
+        MailServer mail_server;
+        set_text(stmt.get(), 0, mail_server.domain);
+        set_text(stmt.get(), 1, mail_server.url);
+
+        servers.push_back(std::move(mail_server));
+    }
+
+    return servers;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
  * @brief Применение миграций базы данных
  */
 void DatabaseStorage::apply_migrations() {
 
-    int version = db_version();
-    if (LATEST_DB_VERSION == version) {
+    int last_version = last_migration_version();
+    int version      = db_version();
+    if (version == last_version) {
         log_info("database is up to date. version: {}", version);
         return;
     }
 
-    log_info("database is outdated. version: {}, latest: {}", version, LATEST_DB_VERSION);
+    log_info("database is outdated. version: {}, latest: {}", version, last_version);
 
     for (const auto& [name, sql] : migration_files) {
 
@@ -522,16 +592,16 @@ void DatabaseStorage::apply_migrations() {
         apply_migration(migration_ver, sql);
         log_info("migration successfully applied. migration: {}", name);
 
-        if (migration_ver == LATEST_DB_VERSION) {
+        if (migration_ver == last_version) {
             break;
         }
     }
 
     version = db_version();
-    if (LATEST_DB_VERSION == version) {
+    if (version == last_version) {
         log_info("database is up to date. version: {}", version);
     } else {
-        throw std::runtime_error(std::format("database is not up to date. version: {}, latest: {}", version, LATEST_DB_VERSION));
+        throw std::runtime_error(std::format("database is not up to date. version: {}, latest: {}", version, last_version));
     }
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -552,7 +622,7 @@ void DatabaseStorage::apply_migration(int migration_ver, const std::string& sql)
 
     err = sqlite3_exec(m_db.get(), sql.c_str(), nullptr, nullptr, nullptr);
     if (err != SQLITE_OK) {
-        std::string text = std::format("sql exec failed. migration={}", migration_ver);
+        std::string text = std::format("sql exec failed. migration={}. error: {}", migration_ver, sqlite3_errmsg(m_db.get()));
         throw std::runtime_error(text);
     }
 
@@ -566,6 +636,43 @@ void DatabaseStorage::apply_migration(int migration_ver, const std::string& sql)
         std::string text = std::format("COMMIT failed. migration={}", migration_ver);
         throw std::runtime_error(text);
     }
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Получение версии последней миграции
+ * @return Номер последней миграции
+ */
+int DatabaseStorage::last_migration_version() {
+
+    int version = 0;
+
+    for (const auto& name : migration_files | std::views::keys) {
+
+        if (!name.ends_with(".up.sql")) {
+            continue;
+        }
+
+        int migration_ver = 0;
+
+        size_t pos = name.find("_");
+        if (pos == std::string::npos) {
+            log_error("invalid migration: {}", name);
+            break;
+        }
+
+        auto [_, err] = std::from_chars(name.data(), name.data() + pos, migration_ver);
+        if (err != std::errc()) {
+            log_error("invalid migration: {}", name);
+            break;
+        }
+
+        if (migration_ver > version) {
+            version = migration_ver;
+        }
+    }
+
+    return version;
 }
 //----------------------------------------------------------------------------------------------------------------------
 

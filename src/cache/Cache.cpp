@@ -5,6 +5,7 @@
 #include "logger.h"
 //----------------------------------------------------------
 #include "../core/PasswordCryptor.h"
+#include "../mail/ImapDiscoveryTool.h"
 //----------------------------------------------------------
 #include "Cache.h"
 //----------------------------------------------------------
@@ -160,7 +161,7 @@ IRepository::Chats Cache::chats() noexcept {
 */
 IRepository::ChatResult Cache::append_email(int64_t chat_id, const Email& email) noexcept {
 
-    if (!is_correct_email_addr(email.address)) {
+    if (!ImapDiscoveryTool::is_correct_email(email.address)) {
         return std::unexpected(Errors::Repository::InvalidEmail);
     }
 
@@ -172,6 +173,12 @@ IRepository::ChatResult Cache::append_email(int64_t chat_id, const Email& email)
     }
     if (it == m_cache_data.end()) {
         return std::unexpected(Errors::Repository::NotFound);
+    }
+
+    auto domain_opt = update_domain(email.address);
+    if (domain_opt) {
+        //: Что-то не то с доменом
+        return std::unexpected(domain_opt.value());
     }
 
     auto& emails = it->second->emails;
@@ -210,7 +217,7 @@ IRepository::ChatResult Cache::append_email(int64_t chat_id, const Email& email)
 */
 IRepository::ChatResult Cache::update_email(int64_t chat_id, const Email& email) noexcept {
 
-    if (!is_correct_email_addr(email.address)) {
+    if (!ImapDiscoveryTool::is_correct_email(email.address)) {
         return std::unexpected(Errors::Repository::InvalidEmail);
     }
 
@@ -222,6 +229,12 @@ IRepository::ChatResult Cache::update_email(int64_t chat_id, const Email& email)
     }
     if (it == m_cache_data.end()) {
         return std::unexpected(Errors::Repository::NotFound);
+    }
+
+    auto domain_opt = update_domain(email.address);
+    if (domain_opt) {
+        //: Что-то не то с доменом
+        return std::unexpected(domain_opt.value());
     }
 
     auto& emails = it->second->emails;
@@ -337,6 +350,57 @@ bool Cache::delete_email(int64_t chat_id, int64_t email_id) noexcept {
 //----------------------------------------------------------------------------------------------------------------------
 
 /**
+ * @brief Обновление информации о доменах
+ * @param email_addr Адрес почты
+ * @return std::nullopt, если такой домен существует или успешно добален. Иначе ошибку.
+ */
+std::optional<Errors::Repository> Cache::update_domain(const std::string& email_addr) {
+
+    auto domain_res = ImapDiscoveryTool::domain_from_email(email_addr);
+    if (!domain_res.has_value()) {
+        switch (domain_res.error()) {
+            case Errors::ImapDiscover::EmailSyntax:
+                return Errors::Repository::InvalidEmail;
+            default:
+                log_error("failed get domain from email. email={}, error: {}", email_addr, Errors::to_string(domain_res.error()));
+                return Errors::Repository::Internal;
+        }
+    }
+
+    if (m_mail_servers.find(domain_res.value()) != m_mail_servers.end()) {
+        return std::nullopt; //: Такой домен известен
+    }
+
+    auto mail_server_res = ImapDiscoveryTool::detect_mail_server(email_addr);
+    if (!mail_server_res.has_value()) {
+        switch (mail_server_res.error()) {
+            case Errors::ImapDiscover::DomainNotFound:
+                return Errors::Repository::InvalidEmail;
+            case Errors::ImapDiscover::EmailSyntax:
+                return Errors::Repository::InvalidEmail;
+            default:
+                log_error("failed get domain info. email={}, error: {}", email_addr, Errors::to_string(mail_server_res.error()));
+                return Errors::Repository::Internal;
+        }
+    }
+
+    auto mail_server = std::move(mail_server_res.value());
+
+    try {
+        m_storage->append_mail_server(mail_server);
+    } catch (const std::exception& ex) {
+        log_error("exception add mail server in storage. email={}, ex: {}", email_addr, ex.what());
+        return Errors::Repository::Internal;
+    }
+
+    auto domain = std::move(mail_server);
+
+    m_mail_servers[domain.domain] = domain.url;
+    return std::nullopt;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
  * @brief Перезагрузка данных из хранилища
  */
 void Cache::reload_from_storage() {
@@ -348,6 +412,11 @@ void Cache::reload_from_storage() {
     for (ChatCipher& chat_cipher : chats) {
         auto chat = convert_chat_from_cipher(chat_cipher);
         m_cache_data.emplace(chat.id, std::make_shared<Chat>(std::move(chat)));
+    }
+
+    auto mail_servers = m_storage->mail_servers();
+    for (const auto& mail_server : mail_servers) {
+        m_mail_servers[mail_server.domain] = mail_server.url;
     }
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -511,6 +580,14 @@ Email Cache::convert_email_from_cipher(const EmailCipher& email_cipher) const {
     email.address    = email_cipher.address;
     email.last_uid   = email_cipher.last_uid;
     email.extensions = email_cipher.extensions;
+
+    auto domain_res = ImapDiscoveryTool::domain_from_email(email.address);
+    if (domain_res) {
+        auto it = m_mail_servers.find(domain_res.value());
+        if (it != m_mail_servers.end()) {
+            email.url_imap = it->second;
+        }
+    }
 
     try {
         if (!email_cipher.password.data.empty()) {

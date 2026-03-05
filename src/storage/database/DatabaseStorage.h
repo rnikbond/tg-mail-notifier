@@ -30,6 +30,9 @@ public:
     virtual void update_email(int64_t chat_id, const EmailCipher& email) override;
     virtual void delete_email(int64_t chat_id, int64_t email_id) override;
 
+    virtual void append_mail_server(const MailServer& server) override;
+    virtual std::vector<MailServer> mail_servers() override;
+
 private:
 
     struct SQLiteDeleter
@@ -47,6 +50,7 @@ private:
     void apply_migrations();
     void apply_migration(int migration_ver, const std::string& sql);
 
+    int last_migration_version();
     int db_version();
     bool set_db_version(int version);
 };

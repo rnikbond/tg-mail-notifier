@@ -110,6 +110,7 @@ IMailRequest::MailMsgResult MailRequest::fetch_email(const Email& email, int64_t
     ExecutionTimer benchmark(std::format("MailRequest::fetch_email(email={})", email.address));
 
     std::string url = std::format("imaps://imap.yandex.ru/INBOX/;UID={}", uid);
+    url             = std::format("{}/INBOX/;UID={}", email.url_imap, uid);
     std::string response;
 
     auto err = execute_url(email, url, response);
@@ -138,10 +139,13 @@ Errors::Mail MailRequest::execute_request(const Email& email, const std::string&
         return Errors::Mail::Internal;
     }
 
+    std::string url = "imaps://imap.yandex.ru/INBOX";
+    url             = std::format("{}/INBOX", email.url_imap);
+
     curl_easy_setopt(curl.get(), CURLOPT_USERNAME, email.address.c_str());
     curl_easy_setopt(curl.get(), CURLOPT_PASSWORD, email.password.c_str());
 
-    curl_easy_setopt(curl.get(), CURLOPT_URL, "imaps://imap.yandex.ru/INBOX");
+    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl.get(), CURLOPT_CUSTOMREQUEST, request.c_str());
 
     curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, write_callback_response);

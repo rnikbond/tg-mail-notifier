@@ -65,6 +65,18 @@ public:
      * @param email_id Идентификатор электронной почты
      */
     virtual void delete_email(int64_t chat_id, int64_t email_id) = 0;
+
+    /**
+     * @brief Добавление информации о почтовом сервере
+     * @param server Данные почтового сервера
+     */
+    virtual void append_mail_server(const MailServer& server) = 0;
+
+    /**
+     * @brief Получение информации о почтовых серверах
+     * @return Список известных почтовых серверов
+     */
+    virtual std::vector<MailServer> mail_servers() = 0;
 };
 //----------------------------------------------------------------------------------------------------------------------
 

@@ -27,9 +27,13 @@ public:
     virtual void update_email(int64_t chat_id, const EmailCipher& email) override;
     virtual void delete_email(int64_t chat_id, int64_t id) override;
 
+    virtual void append_mail_server(const MailServer& server) override;
+    virtual std::vector<MailServer> mail_servers() override;
+
 private:
 
     std::unordered_map<int64_t, ChatCipher> m_data;
+    std::unordered_map<std::string, std::string> m_mail_servers;
 };
 //----------------------------------------------------------------------------------------------------------------------
 

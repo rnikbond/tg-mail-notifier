@@ -278,7 +278,7 @@ RequestOpt TelegramController::handle_cmd(const json& body_js, int idx, std::sha
             return prepare_request_email(chat);
         case Commands::Password:
 
-            if (chat->emails.empty() || chat->emails.at(0).address.empty()) {
+            if (chat->emails.empty() || chat->emails.begin()->second.address.empty()) {
                 std::string text = std::format("Сначала нужно указать Email через команду: {}\n", find_command_text(Commands::Email));
                 return prepare_request_text(chat, text);
             }

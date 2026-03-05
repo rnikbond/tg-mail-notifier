@@ -60,6 +60,7 @@ add_executable(tg-mail-notifier
     ${SOURCES}
     src/core/PasswordCryptor.h src/core/PasswordCryptor.cpp
     src/utils/ExecutionTimer.h src/utils/ExecutionTimer.cpp
+    src/mail/ImapDiscoveryTool.h src/mail/ImapDiscoveryTool.cpp
 )
 
 ## Подключение миграций
@@ -67,13 +68,16 @@ add_subdirectory(migrations)
 target_link_libraries(tg-mail-notifier migrations_interface)
 
 ## Добавление доп. библиотек
-target_link_libraries(tg-mail-notifier spdlog::spdlog)
-target_link_libraries(tg-mail-notifier CLI11::CLI11)
-target_link_libraries(tg-mail-notifier httplib)
-target_link_libraries(tg-mail-notifier nlohmann_json::nlohmann_json)
-target_link_libraries(tg-mail-notifier CURL::libcurl)
-target_link_libraries(tg-mail-notifier ${GMIME_LIBRARIES})
-target_link_libraries(tg-mail-notifier SQLite::SQLite3)
+target_link_libraries(tg-mail-notifier
+    spdlog::spdlog
+    CLI11::CLI11
+    httplib
+    nlohmann_json::nlohmann_json
+    CURL::libcurl
+    ${GMIME_LIBRARIES}
+    SQLite::SQLite3
+    resolv
+)
 
 ## Подключение тестов
 #add_subdirectory(tests)

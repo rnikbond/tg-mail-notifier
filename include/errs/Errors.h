@@ -26,6 +26,15 @@ enum class Repository {
 };
 //----------------------------------------------------------
 
+/// @brief Ошибки при работе с почтовым сервисом
+enum class ImapDiscover {
+    OK             = 0,   ///< Ошибок нет
+    EmailSyntax    = 1,   ///< Некорректный email
+    DomainNotFound = 2,   ///< Не удалось определить домен
+    Internal       = 100, ///< Внутренняя ошибка
+};
+//----------------------------------------------------------
+
 template<typename ErrT>
 [[nodiscard]] constexpr std::string_view to_string(ErrT err) noexcept {
 
@@ -58,6 +67,19 @@ template<typename ErrT>
                 return "internal retository error";
             default:
                 return "unknown repository error";
+        }
+    } else if constexpr (std::same_as<ErrT, ImapDiscover>) {
+        switch (err) {
+            case ImapDiscover::OK:
+                return "OK";
+            case ImapDiscover::EmailSyntax:
+                return "invalid email syntax";
+            case ImapDiscover::DomainNotFound:
+                return "domain not found";
+            case ImapDiscover::Internal:
+                return "internal imap-discover error";
+            default:
+                return "unknown imap-discover error";
         }
     }
 

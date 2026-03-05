@@ -36,6 +36,7 @@ private:
 
     size_t      m_timeout = {10};
     std::string m_token;
+    std::string m_host;
     int64_t     m_last_chat_update_id = {-1};
 
     std::shared_ptr<IRepository> m_repo;

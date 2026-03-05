@@ -14,6 +14,7 @@
  */
 TelegramManager::TelegramManager(const std::string& host, const std::string& token, size_t timeout, std::shared_ptr<IRepository> repo)
     : m_token(token)
+    , m_host(host)
     , m_timeout(timeout)
     , m_repo(repo)
     , m_http(std::make_unique<httplib::Client>(host))
@@ -26,6 +27,10 @@ TelegramManager::TelegramManager(const std::string& host, const std::string& tok
     if (!m_repo) {
         throw std::runtime_error("repository is not initialized");
     }
+
+    // m_http->set_keep_alive(false);
+    // m_http->set_read_timeout(20, 0); // Запас в 10 секунд относительно Telegram
+    // m_http->set_connection_timeout(5, 0);
 }
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -92,6 +97,9 @@ void TelegramManager::run() {
 
     constexpr std::string_view url_template = "/bot{}/getUpdates?offset={}&timeout={}";
 
+    httplib::Headers headers = {{"Connection", "close"}};
+
+    int  counter   = 0;
     auto tg_sender = TelegramSenderFactory::create();
 
     while (true) {
@@ -103,19 +111,24 @@ void TelegramManager::run() {
         httplib::Result res;
 
         try {
-            httplib::Result res = m_http->Get(url);
-            if (!res) {
+
+            log_info("=> request Get()");
+            httplib::Result res = m_http->Get(url, headers);
+            log_info("<= response Get()");
+
+            if (res) {
+                TelegramResponse response;
+                response.body = res->body;
+
+                auto request = m_controller->process(std::move(response), m_last_chat_update_id);
+                if (request.has_value()) {
+                    tg_sender->send_msg(request.value());
+                }
+
+            } else {
                 auto err = res.error();
                 log_error(std::format("http::Get({}) returned error: {}", url, httplib::to_string(err)));
-                continue;
-            }
-
-            TelegramResponse response;
-            response.body = res->body;
-
-            auto request = m_controller->process(std::move(response), m_last_chat_update_id);
-            if (request.has_value()) {
-                tg_sender->send_msg(request.value());
+                //m_http.reset(new httplib::Client(m_host));
             }
 
         } catch (const std::exception& ex) {

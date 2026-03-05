@@ -42,6 +42,7 @@ private:
 
     std::unique_ptr<IStorage> m_storage;
     std::unordered_map<int64_t, std::shared_ptr<Chat>> m_cache_data;
+    std::unordered_map<std::string, std::string>       m_mail_servers; //: <domain, url_imap>
 
 private:
 
@@ -49,6 +50,10 @@ private:
     std::unordered_map<int64_t, std::shared_ptr<Chat>>::iterator append(int64_t chat_id);
     std::vector<std::shared_ptr<Chat>> append(const std::vector<int64_t>& chat_ids);
     std::shared_ptr<Chat> refresh(int64_t chat_id);
+
+private:
+
+    std::optional<Errors::Repository> update_domain(const std::string& email_addr);
 
 private:
 

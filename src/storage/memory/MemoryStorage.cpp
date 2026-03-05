@@ -146,3 +146,32 @@ void MemoryStorage::delete_email(int64_t chat_id, int64_t id) {
     emails.erase(id);
 }
 //----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Добавление информации о почтовом сервере
+ * @param server Данные почтового сервера
+ */
+void MemoryStorage::append_mail_server(const MailServer& server) {
+    m_mail_servers[server.domain] = server.url;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
+ * @brief Получение информации о почтовых серверах
+ * @return Список известных почтовых серверов
+ */
+std::vector<MailServer> MemoryStorage::mail_servers() {
+
+    std::vector<MailServer> servers;
+    servers.reserve(m_mail_servers.size());
+
+    for (const auto& [domain, url_imap] : m_mail_servers) {
+        MailServer server;
+        server.domain = domain;
+        server.url    = url_imap;
+        servers.push_back(std::move(server));
+    }
+
+    return servers;
+}
+//----------------------------------------------------------------------------------------------------------------------
