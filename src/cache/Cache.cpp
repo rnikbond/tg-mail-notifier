@@ -175,7 +175,7 @@ IRepository::ChatResult Cache::append_email(int64_t chat_id, const Email& email)
         return std::unexpected(Errors::Repository::NotFound);
     }
 
-    auto domain_opt = update_domain(email.address);
+    auto domain_opt = update_mail_server(email.address);
     if (domain_opt) {
         //: Что-то не то с доменом
         return std::unexpected(domain_opt.value());
@@ -231,7 +231,7 @@ IRepository::ChatResult Cache::update_email(int64_t chat_id, const Email& email)
         return std::unexpected(Errors::Repository::NotFound);
     }
 
-    auto domain_opt = update_domain(email.address);
+    auto domain_opt = update_mail_server(email.address);
     if (domain_opt) {
         //: Что-то не то с доменом
         return std::unexpected(domain_opt.value());
@@ -350,11 +350,11 @@ bool Cache::delete_email(int64_t chat_id, int64_t email_id) noexcept {
 //----------------------------------------------------------------------------------------------------------------------
 
 /**
- * @brief Обновление информации о доменах
+ * @brief Обновление информации о почтовом сервере
  * @param email_addr Адрес почты
  * @return std::nullopt, если такой домен существует или успешно добален. Иначе ошибку.
  */
-std::optional<Errors::Repository> Cache::update_domain(const std::string& email_addr) {
+std::optional<Errors::Repository> Cache::update_mail_server(const std::string& email_addr) {
 
     auto domain_res = ImapDiscoveryTool::domain_from_email(email_addr);
     if (!domain_res.has_value()) {

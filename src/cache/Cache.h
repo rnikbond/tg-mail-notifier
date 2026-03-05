@@ -53,7 +53,7 @@ private:
 
 private:
 
-    std::optional<Errors::Repository> update_domain(const std::string& email_addr);
+    std::optional<Errors::Repository> update_mail_server(const std::string& email_addr);
 
 private:
 
