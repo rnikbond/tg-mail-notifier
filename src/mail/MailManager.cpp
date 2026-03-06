@@ -125,7 +125,7 @@ void MailManager::scan_mails() {
 
                 log_info("send mail msg in telegram. chat_id:={}, email={}, UID={}", chat->id, email.address, uid);
 
-                tg_sender->send_msg(chat->id, std::move(msg_res.value()));
+                tg_sender->send_email_msg(chat->id, std::move(msg_res.value()));
                 last_uid = uid;
             }
 

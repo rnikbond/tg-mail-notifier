@@ -43,8 +43,10 @@ private:
 
     [[nodiscard]] TelegramRequest prepare_request_about(std::shared_ptr<const Chat> chat) const noexcept;
     [[nodiscard]] TelegramRequest prepare_request_status(std::shared_ptr<const Chat> chat) const noexcept;
-    [[nodiscard]] TelegramRequest prepare_request_email(std::shared_ptr<const Chat> chat) const noexcept;
-    [[nodiscard]] TelegramRequest prepare_request_password(std::shared_ptr<const Chat> chat) const noexcept;
+    [[nodiscard]] TelegramRequest prepare_request_add_email(std::shared_ptr<const Chat> chat) const noexcept;
+    [[nodiscard]] TelegramRequest prepare_request_change_password(std::shared_ptr<const Chat> chat) const noexcept;
+    [[nodiscard]] TelegramRequest prepare_request_set_password(std::shared_ptr<const Chat> chat, const std::string& email) const noexcept;
+    [[nodiscard]] TelegramRequest prepare_request_clear_email(std::shared_ptr<const Chat> chat) const noexcept;
 
     [[nodiscard]] TelegramRequest prepare_request_unknown(std::shared_ptr<const Chat> chat) const noexcept;
     [[nodiscard]] TelegramRequest prepare_request_internal_err(std::shared_ptr<const Chat> chat) const noexcept;
@@ -53,11 +55,14 @@ private:
     [[nodiscard]] TelegramRequest prepare_request_json(std::shared_ptr<const Chat> chat, const json& js_body) const noexcept;
 
     [[nodiscard]] TelegramRequest process_reply_email(const json& body_js, int idx, std::shared_ptr<const Chat> chat);
-    [[nodiscard]] TelegramRequest process_reply_password(const json& body_js, int idx, std::shared_ptr<const Chat> chat);
+    [[nodiscard]] TelegramRequest process_reply_set_password(const json& body_js, int idx, std::shared_ptr<const Chat> chat);
+    [[nodiscard]] TelegramRequest process_reply_change_password(const json& body_js, int idx, std::shared_ptr<const Chat> chat);
+    [[nodiscard]] TelegramRequest process_reply_clear_email(const json& body_js, int idx, std::shared_ptr<const Chat> chat);
     [[nodiscard]] TelegramRequest process_cmd_clear_email_auth(std::shared_ptr<const Chat> chat) const noexcept;
 
     [[nodiscard]] std::optional<int64_t> check_email_auth(int64_t chat_id, const Email& email) const noexcept;
 
+    std::optional<std::string> value_after_marker(const std::string& marker_start, const std::string& marker_end, const std::string& text) const noexcept;
     void strip_whitespace(std::string_view& text) const noexcept;
 };
 //----------------------------------------------------------------------------------------------------------------------

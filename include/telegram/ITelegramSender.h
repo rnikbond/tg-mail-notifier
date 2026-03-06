@@ -28,6 +28,14 @@ public:
      * @return TRUE, если сообщение отправлено. Иначе FALSE.
      */
     virtual bool send_msg(const TelegramRequest& request) const noexcept = 0;
+
+    /**
+     * @brief Запрос на пересылку сообщения из электронной почты
+     * @param chat_id Идентификатор telegram чата
+     * @param body    Содержимое письма
+     * @return TRUE, если сообщение успешно отправлено. Иначе FALSE.
+     */
+    virtual bool send_email_msg(int64_t chat_id, const std::string& body) const noexcept = 0;
 };
 //----------------------------------------------------------------------------------------------------------------------
 #endif // ITELEGRAMSENDER_H

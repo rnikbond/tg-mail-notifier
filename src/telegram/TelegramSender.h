@@ -28,6 +28,7 @@ public:
 public:
 
     virtual bool send_msg(int64_t chat_id, const std::string& body) const noexcept override;
+    virtual bool send_email_msg(int64_t chat_id, const std::string& body) const noexcept override;
     virtual bool send_msg(const TelegramRequest& request) const noexcept override;
 
 private:

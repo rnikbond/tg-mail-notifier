@@ -61,6 +61,46 @@ bool TelegramSender::send_msg(int64_t chat_id, const std::string &body) const no
 //----------------------------------------------------------------------------------------------------------------------
 
 /**
+ * @brief Запрос на пересылку сообщения из электронной почты
+ * @param chat_id Идентификатор telegram чата
+ * @param body    Содержимое письма
+ * @return TRUE, если сообщение успешно отправлено. Иначе FALSE.
+ */
+bool TelegramSender::send_email_msg(int64_t chat_id, const std::string &body) const noexcept {
+
+    constexpr std::string_view url_template = "/bot{}/sendMessage";
+
+    std::string url = std::format(url_template, m_token);
+
+    json js_body;
+    js_body["chat_id"]    = chat_id;
+    js_body["text"]       = body;
+    js_body["parse_mode"] = "HTML";
+
+    std::string text;
+    try {
+        text = js_body.dump();
+    } catch (const json::exception &ex) {
+        log_error("failed JSON::dump(). chat_id={}, json-exception: {}\n{}", chat_id, ex.what(), body);
+        js_body["text"] = "Не удалось отправить сообщение из электронной почты";
+        text            = js_body.dump();
+    }
+
+    try {
+        auto err = execute(url, text, "application/json", chat_id);
+        if (err) {
+            return false;
+        }
+    } catch (const std::exception &ex) {
+        log_error("failed on send msg in telegram. chat_id={}, exception: {}", chat_id, ex.what());
+        return false;
+    }
+
+    return true;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+/**
  * @brief Запрос на отправку сообщения
  * @param request Заполненная структура для отправки сообщения
  * @return TRUE, если сообщение отправлено. Иначе FALSE.

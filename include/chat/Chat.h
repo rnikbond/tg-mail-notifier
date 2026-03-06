@@ -118,6 +118,15 @@ struct Chat
     ChatExt      extensions;   ///< Доп. настройки чата
 
     std::unordered_map<int64_t, Email> emails; ///< <email_id, Email> Данные об электронной почте
+
+    int64_t find_email_id(const std::string& email) const {
+        for (auto it = emails.begin(); it != emails.end(); ++it) {
+            if (it->second.address == email) {
+                return it->first;
+            }
+        }
+        return -1;
+    }
 };
 //----------------------------------------------------------------------------------------------------------------------
 
