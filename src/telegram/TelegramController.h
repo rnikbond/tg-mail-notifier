@@ -27,6 +27,7 @@ public:
     TelegramController(const std::string& token, std::shared_ptr<IRepository> repo);
 
     RequestOpt commands() const;
+    RequestOpt menu_buttons(int64_t chat_id) const;
     RequestOpt process(const TelegramResponse&& response, int64_t& last_msg_id);
 
 private:

@@ -33,7 +33,6 @@ const std::unordered_map<std::string, Commands> g_commands_map = {
     {"/add_email", Commands::AddEmail},
     {"/change_password", Commands::ChangePassword},
     {"/clear_email", Commands::ClearEmail},
-    {"/buttons", Commands::Buttons},
 };
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -110,6 +109,53 @@ RequestOpt TelegramController::commands() const {
     // clang-format on
 
     constexpr std::string_view url = "/bot{}/setMyCommands";
+
+    TelegramRequest request;
+    request.url          = std::format(url, m_token);
+    request.body         = js_body.dump();
+    request.content_type = "application/json";
+    request.chat_id      = 0;
+
+    return request;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+RequestOpt TelegramController::menu_buttons(int64_t chat_id) const {
+
+    // 1. Создаем основной массив для клавиатуры
+    json keyboard = json::array();
+
+    {
+        json row = json::array();
+        row.push_back({{"text", find_command_text(Commands::AddEmail)}});
+        keyboard.push_back(row);
+    }
+
+    {
+        json row = json::array();
+        row.push_back({{"text", find_command_text(Commands::ChangePassword)}});
+        keyboard.push_back(row);
+    }
+
+    {
+        json row = json::array();
+        row.push_back({{"text", find_command_text(Commands::ClearEmail)}});
+        keyboard.push_back(row);
+    }
+
+    {
+        json row = json::array();
+        row.push_back({{"text", find_command_text(Commands::Status)}});
+        keyboard.push_back(row);
+    }
+
+    // 3. Формируем итоговый JSON для sendMessage
+    json js_body = {{"chat_id", chat_id}, // ID получателя
+                    {"text", "Выберите команду из списка:"},
+                    {"reply_markup", {{"keyboard", keyboard}, {"resize_keyboard", true}, {"one_time_keyboard", false}}}};
+
+    //constexpr std::string_view url = "/bot{}/setMyCommands";
+    constexpr std::string_view url = "/bot{}/sendMessage";
 
     TelegramRequest request;
     request.url          = std::format(url, m_token);
