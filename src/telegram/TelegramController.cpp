@@ -22,6 +22,7 @@ enum class Commands {
     AddEmail,       ///< Команда "/add_email"
     ChangePassword, ///< Команда "/change_password"
     ClearEmail,     ///< Команда "/clear_email"
+    Buttons,        ///< Команда "/buttons"
 };
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -32,6 +33,7 @@ const std::unordered_map<std::string, Commands> g_commands_map = {
     {"/add_email", Commands::AddEmail},
     {"/change_password", Commands::ChangePassword},
     {"/clear_email", Commands::ClearEmail},
+    {"/buttons", Commands::Buttons},
 };
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -134,6 +136,8 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
     try {
         json body_js = json::parse(response.body);
 
+        //log_info(body_js.dump(4));
+
         //: Обрабатка только последнего сообщения
         int idx = body_js["result"].size() - 1;
         if (idx < 0) {
@@ -149,7 +153,13 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
         //: Запоминаем идентификатор сообщения
         last_msg_id = update_id;
 
-        int64_t chat_id = body_js["result"][idx]["message"]["chat"]["id"];
+        int64_t chat_id = -1;
+
+        if (body_js["result"][idx].contains("callback_query")) {
+            chat_id = body_js["result"][idx]["callback_query"]["message"]["chat"]["id"];
+        } else {
+            chat_id = body_js["result"][idx]["message"]["chat"]["id"];
+        }
 
         std::shared_ptr<const Chat> chat;
         { //: Поиск/регистрация чата
@@ -162,7 +172,9 @@ RequestOpt TelegramController::process(const TelegramResponse&& response, int64_
             }
         }
 
-        if (body_js["result"][idx]["message"].contains("reply_to_message")) {
+        if (body_js["result"][idx].contains("callback_query")) {
+            return handle_button_click(body_js, idx, chat);
+        } else if (body_js["result"][idx]["message"].contains("reply_to_message")) {
             return handle_reply_on_cmd(body_js, idx, chat);
         } else {
             return handle_cmd(body_js, idx, chat);
@@ -252,6 +264,44 @@ RequestOpt TelegramController::handle_reply_on_cmd(const json& body_js, int idx,
 }
 //----------------------------------------------------------------------------------------------------------------------
 
+RequestOpt TelegramController::handle_button_click(const json& body_js, int idx, std::shared_ptr<const Chat> chat) {
+
+    std::string button_data = body_js["result"][idx]["callback_query"]["data"];
+
+    if (button_data.starts_with(MARKER_CHANGE_PASS)) {
+
+        auto email_opt = value_after_marker(MARKER_EMAIL, MARKER_EMAIL, button_data);
+        if (!email_opt.has_value()) {
+            return prepare_request_text(chat, std::format("не определил email"));
+        }
+
+        return prepare_request_set_password(chat, email_opt.value());
+
+    } else if (button_data.starts_with(MARKER_DEL_EMAIL)) {
+
+        auto email_opt = value_after_marker(MARKER_EMAIL, MARKER_EMAIL, button_data);
+        if (!email_opt.has_value()) {
+            return prepare_request_text(chat, std::format("не определил email"));
+        }
+
+        int64_t email_id = chat->find_email_id(email_opt.value());
+        if (email_id < 0) {
+            return prepare_request_text(chat, std::format("не определил email"));
+        }
+
+        auto err = Errors::Repository::OK;
+        bool ok  = m_repo->delete_email(chat->id, email_id);
+        if (ok) {
+            return prepare_request_text(chat, "✅ email удалён");
+        } else {
+            return prepare_request_text(chat, "❗️ Такой email не найден");
+        }
+    }
+
+    return prepare_request_unknown(chat);
+}
+//----------------------------------------------------------------------------------------------------------------------
+
 /**
  * @brief Обработка команды из telegram
  * @param body_js Данные в виде JSON объекта
@@ -283,9 +333,9 @@ RequestOpt TelegramController::handle_cmd(const json& body_js, int idx, std::sha
 
             return prepare_request_add_email(chat);
         case Commands::ChangePassword:
-            return prepare_request_change_password(chat);
+            return prepare_request_buttons_change_email(chat);
         case Commands::ClearEmail:
-            return prepare_request_clear_email(chat);
+            return prepare_request_buttons_clear_email(chat);
         default:
             log_error("no case for command: {}", command_text);
             return prepare_request_unknown(chat);
@@ -595,6 +645,44 @@ TelegramRequest TelegramController::prepare_request_clear_email(std::shared_ptr<
     js_body["chat_id"]      = chat->id;
     js_body["text"]         = std::format("{}Введите email, который нужно удалить:", MARKER_DEL_EMAIL);
     js_body["reply_markup"] = {{"force_reply", true}};
+
+    return prepare_request_json(chat, js_body);
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+TelegramRequest TelegramController::prepare_request_buttons_change_email(std::shared_ptr<const Chat> chat) const noexcept {
+
+    json keyboard = json::array();
+
+    for (const auto& [_, email] : chat->emails) {
+        keyboard.push_back(json::array(
+            {{{"text", email.address}, {"callback_data", std::format("{}{}{}{}", MARKER_CHANGE_PASS, MARKER_EMAIL, email.address, MARKER_EMAIL)}}}));
+    }
+
+    json js_body;
+    js_body["chat_id"]                         = chat->id;
+    js_body["text"]                            = "Выберете Email для смены пароля";
+    js_body["reply_markup"]["inline_keyboard"] = keyboard;
+
+    return prepare_request_json(chat, js_body);
+}
+//----------------------------------------------------------------------------------------------------------------------
+
+TelegramRequest TelegramController::prepare_request_buttons_clear_email(std::shared_ptr<const Chat> chat) const noexcept {
+
+    json keyboard = json::array();
+
+    for (const auto& [_, email] : chat->emails) {
+        keyboard.push_back(
+            json::array({{{"text", email.address}, {"callback_data", std::format("{}{}{}{}", MARKER_DEL_EMAIL, MARKER_EMAIL, email.address, MARKER_EMAIL)}}}));
+    }
+
+    json js_body;
+    js_body["chat_id"]                         = chat->id;
+    js_body["text"]                            = "Выберете Email для удаления";
+    js_body["reply_markup"]["inline_keyboard"] = keyboard;
+
+    log_info("send buttons:\n{}", js_body.dump(4));
 
     return prepare_request_json(chat, js_body);
 }

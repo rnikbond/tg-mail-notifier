@@ -121,6 +121,22 @@ bool TelegramSender::send_msg(const TelegramRequest &request) const noexcept {
 }
 //----------------------------------------------------------------------------------------------------------------------
 
+bool TelegramSender::send_buttons(const TelegramRequest &request) const noexcept {
+
+    try {
+        auto err = execute(request.url, request.body, request.content_type, request.chat_id);
+        if (err) {
+            return false;
+        }
+    } catch (const std::exception &ex) {
+        log_error("failed on send buttons in telegram. url={}, exception: {}", request.url, ex.what());
+        return false;
+    }
+
+    return false;
+}
+//----------------------------------------------------------------------------------------------------------------------
+
 /*!
  * @brief Выполнение запроса на отправку сообщения в telegram
  * @param url          URL для отправки

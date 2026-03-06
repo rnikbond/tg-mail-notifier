@@ -36,6 +36,8 @@ public:
      * @return TRUE, если сообщение успешно отправлено. Иначе FALSE.
      */
     virtual bool send_email_msg(int64_t chat_id, const std::string& body) const noexcept = 0;
+
+    virtual bool send_buttons(const TelegramRequest& request) const noexcept = 0;
 };
 //----------------------------------------------------------------------------------------------------------------------
 #endif // ITELEGRAMSENDER_H

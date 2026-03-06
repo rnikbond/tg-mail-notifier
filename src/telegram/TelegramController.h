@@ -40,6 +40,7 @@ private:
 
     RequestOpt handle_reply_on_cmd(const json& body_js, int idx, std::shared_ptr<const Chat> chat);
     RequestOpt handle_cmd(const json& body_js, int idx, std::shared_ptr<const Chat> chat);
+    RequestOpt handle_button_click(const json& body_js, int idx, std::shared_ptr<const Chat> chat);
 
     [[nodiscard]] TelegramRequest prepare_request_about(std::shared_ptr<const Chat> chat) const noexcept;
     [[nodiscard]] TelegramRequest prepare_request_status(std::shared_ptr<const Chat> chat) const noexcept;
@@ -47,6 +48,9 @@ private:
     [[nodiscard]] TelegramRequest prepare_request_change_password(std::shared_ptr<const Chat> chat) const noexcept;
     [[nodiscard]] TelegramRequest prepare_request_set_password(std::shared_ptr<const Chat> chat, const std::string& email) const noexcept;
     [[nodiscard]] TelegramRequest prepare_request_clear_email(std::shared_ptr<const Chat> chat) const noexcept;
+
+    [[nodiscard]] TelegramRequest prepare_request_buttons_change_email(std::shared_ptr<const Chat> chat) const noexcept;
+    [[nodiscard]] TelegramRequest prepare_request_buttons_clear_email(std::shared_ptr<const Chat> chat) const noexcept;
 
     [[nodiscard]] TelegramRequest prepare_request_unknown(std::shared_ptr<const Chat> chat) const noexcept;
     [[nodiscard]] TelegramRequest prepare_request_internal_err(std::shared_ptr<const Chat> chat) const noexcept;
