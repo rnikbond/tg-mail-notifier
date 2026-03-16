@@ -216,10 +216,11 @@ std::expected<std::string, Errors::ImapDiscover> ImapDiscoveryTool::url_via_mx(c
                     return "imaps://imap.mail.ru";
                 }
 
-                // 2. Если это частный сервер (как был бы mail.ololo.ru)
-                // Можно попробовать заменить mx на imap, но только в начале строки
-                if (mx_host.starts_with("mx.")) {
-                    return std::format("imaps://imap.{}", mx_host.substr(3));
+                std::vector<std::string> prefixes = {"mx.", "inmx."};
+                for (auto prefix : prefixes) {
+                    if (mx_host.substr(0, prefix.length()) == prefix) {
+                        return "imap." + mx_host.substr(prefix.length());
+                    }
                 }
 
                 return std::format("imaps://{}", mx_host.substr(3));
